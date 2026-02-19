@@ -1,12 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsNumber, IsOptional, IsString, IsArray } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString, IsArray, IsBoolean } from 'class-validator';
 
 export class CreateLessonDto {
   @ApiProperty({ example: 'My Awesome Lesson', description: 'Name of the lesson' })
   @IsString()
   @IsNotEmpty({ message: 'lesson_name_required' })
   name: string;
+
+  @ApiProperty({ example: false, description: 'Whether to disable copying for this lesson', required: false, default: false })
+  @IsBoolean()
+  @IsOptional()
+  is_copying_disabled?: boolean;
 
   @ApiProperty({ example: 'https://...', description: 'Cover image URL' })
   @IsString()

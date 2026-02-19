@@ -6,11 +6,14 @@ import { CreatePhotoDto } from './dto/create-photo.dto';
 import { UpdatePhotoDto } from './dto/update-photo.dto';
 import { Role, Prisma } from '@prisma/client';
 
+import { ContentCleanupService } from '../content-cleanup.service';
+
 @Injectable()
 export class PhotoService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    private contentCleanupService: ContentCleanupService,
   ) {}
 
   /**
@@ -235,7 +238,10 @@ export class PhotoService {
     // 1. Delete from Cloudflare
     await this.storageService.deleteFile(photo.file_key);
 
-    // 2. Delete from DB
+    // 2. Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences([id], superAdminId);
+
+    // 3. Delete from DB
     await this.prisma.photo.delete({ where: { id } });
 
     return { message: 'photo_deleted_successfully' };
@@ -267,7 +273,10 @@ export class PhotoService {
       await this.storageService.deleteFile(photo.file_key);
     }
 
-    // 3. Delete from DB
+    // 3. Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences(idArray, superAdminId);
+
+    // 4. Delete from DB
     await this.prisma.photo.deleteMany({
       where: { id: { in: idArray } }
     });

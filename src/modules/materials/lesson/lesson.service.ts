@@ -96,8 +96,10 @@ export class LessonService {
       category: item.categories?.[0] || null,
     }));
 
+    const dataWithCourses = await this.fillLessonsWithCourses(userId, dataWithFallback);
+
     return {
-      data: dataWithFallback,
+      data: dataWithCourses,
       meta: {
         total,
         page,
@@ -127,10 +129,16 @@ export class LessonService {
       throw new NotFoundException(`Lesson with ID ${id} not found`);
     }
 
-    return {
+    const withFallback = {
       ...lesson,
       category: lesson.categories?.[0] || null,
     };
+
+    const [withCourses] = await this.fillLessonsWithCourses(
+      lesson.author_id,
+      [withFallback],
+    );
+    return withCourses;
   }
 
   async update(id: string, dto: UpdateLessonDto) {
@@ -200,5 +208,40 @@ export class LessonService {
         data: { content }
       });
     }
+  }
+
+  private async fillLessonsWithCourses(userId: string, lessons: any[]) {
+    if (lessons.length === 0) return lessons;
+
+    const allCourses = await this.prisma.course.findMany({
+      where: {
+        OR: [{ author_id: userId }, { super_admin_id: userId }],
+      },
+      select: { id: true, name: true, content: true },
+    });
+
+    return lessons.map((lesson) => {
+      const parentCourses = allCourses.filter((course) => {
+        const content = Array.isArray(course.content) ? course.content : [];
+        return content.some((item: any) => {
+          if (item.type === 'lesson' && item.lesson_id === lesson.id) {
+            return true;
+          }
+          if (
+            item.type === 'group' &&
+            Array.isArray(item.lesson_ids) &&
+            item.lesson_ids.includes(lesson.id)
+          ) {
+            return true;
+          }
+          return false;
+        });
+      });
+
+      return {
+        ...lesson,
+        courses: parentCourses.map((c) => ({ id: c.id, name: c.name })),
+      };
+    });
   }
 }

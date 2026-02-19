@@ -6,11 +6,14 @@ import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
 import { Role, Prisma } from '@prisma/client';
 
+import { ContentCleanupService } from '../content-cleanup.service';
+
 @Injectable()
 export class VideoService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    private contentCleanupService: ContentCleanupService,
   ) {}
 
   /**
@@ -266,7 +269,10 @@ export class VideoService {
       await this.storageService.deleteFile(video.file_key);
     }
 
-    // 2. Delete from DB
+    // 2. Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences([id], superAdminId);
+
+    // 3. Delete from DB
     await this.prisma.video.delete({ where: { id } });
 
     return { message: 'video_deleted_successfully' };
@@ -300,7 +306,10 @@ export class VideoService {
       }
     }
 
-    // 3. Delete from DB
+    // 3. Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences(idArray, superAdminId);
+
+    // 4. Delete from DB
     await this.prisma.video.deleteMany({
       where: { id: { in: idArray } }
     });

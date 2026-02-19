@@ -141,6 +141,7 @@ model Lesson {
   super_admin_id  String?  @map("super_admin_id")
   created_at      DateTime @default(now()) @map("created_at")
   updated_at      DateTime @updatedAt @map("updated_at")
+  is_copying_disabled Boolean @default(false) @map("is_copying_disabled")
 
   author          User     @relation("UserToLesson", fields: [author_id], references: [id])
   super_admin     User?    @relation("SuperAdminToLesson", fields: [super_admin_id], references: [id])

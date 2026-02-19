@@ -12,6 +12,13 @@ export class LessonAuthorResponseDto {
   avatar?: string;
 }
 
+export class LessonCourseResponseDto {
+  @ApiProperty()
+  id: string;
+  @ApiProperty()
+  name: string;
+}
+
 export class LessonResponseDto {
   @ApiProperty()
   id: string;
@@ -24,6 +31,9 @@ export class LessonResponseDto {
 
   @ApiProperty()
   cover_position: number;
+
+  @ApiProperty({ default: false })
+  is_copying_disabled: boolean;
 
   @ApiProperty()
   content: any;
@@ -39,6 +49,9 @@ export class LessonResponseDto {
 
   @ApiProperty({ type: () => [CategoryResponseDto], required: false })
   categories?: CategoryResponseDto[];
+
+  @ApiProperty({ type: () => [LessonCourseResponseDto], required: false })
+  courses?: LessonCourseResponseDto[];
 
   @ApiProperty()
   created_at: Date;

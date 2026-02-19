@@ -6,11 +6,14 @@ import { CreateAudioDto } from './dto/create-audio.dto';
 import { UpdateAudioDto } from './dto/update-audio.dto';
 import { Role, Prisma } from '@prisma/client';
 
+import { ContentCleanupService } from '../content-cleanup.service';
+
 @Injectable()
 export class AudioService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    private contentCleanupService: ContentCleanupService,
   ) {}
 
   /**
@@ -242,7 +245,10 @@ export class AudioService {
     // 1. Delete from Cloudflare
     await this.storageService.deleteFile(audio.file_key);
 
-    // 2. Delete from DB
+    // 2. Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences([id], superAdminId);
+
+    // 3. Delete from DB
     await this.prisma.audio.delete({ where: { id } });
 
     return { message: 'audio_deleted_successfully' };
@@ -274,7 +280,10 @@ export class AudioService {
       await this.storageService.deleteFile(audio.file_key);
     }
 
-    // 3. Delete from DB
+    // 3. Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences(idArray, superAdminId);
+
+    // 4. Delete from DB
     await this.prisma.audio.deleteMany({
       where: { id: { in: idArray } }
     });

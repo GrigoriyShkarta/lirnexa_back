@@ -5,11 +5,14 @@ import { FileQueryDto } from './dto/file-query.dto';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { Role, Prisma } from '@prisma/client';
 
+import { ContentCleanupService } from '../content-cleanup.service';
+
 @Injectable()
 export class FilesService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    private contentCleanupService: ContentCleanupService,
   ) {}
 
   /**
@@ -231,6 +234,10 @@ export class FilesService {
     }
 
     await this.storageService.deleteFile(materialFile.file_key);
+    
+    // Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences([id], superAdminId);
+
     await this.prisma.materialFile.delete({ where: { id } });
 
     return { message: 'file_deleted_successfully' };
@@ -258,6 +265,9 @@ export class FilesService {
     for (const file of files) {
       await this.storageService.deleteFile(file.file_key);
     }
+    
+    // Cleanup from Lessons and Courses
+    await this.contentCleanupService.cleanupMediaReferences(idArray, superAdminId);
 
     await this.prisma.materialFile.deleteMany({
       where: { id: { in: idArray } }

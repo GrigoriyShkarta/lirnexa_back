@@ -5,9 +5,18 @@ import { VideoModule } from './video/video.module';
 import { FilesModule } from './files/files.module';
 import { LessonModule } from './lesson/lesson.module';
 import { CourseModule } from './course/course.module';
+import { ContentCleanupModule } from './content-cleanup.module';
 
 @Module({
-  imports: [AudioModule, PhotoModule, VideoModule, FilesModule, LessonModule, CourseModule],
+  imports: [
+    AudioModule,
+    PhotoModule,
+    VideoModule,
+    FilesModule,
+    LessonModule,
+    CourseModule,
+    ContentCleanupModule
+  ],
 })
- export class MaterialsModule {}
+export class MaterialsModule {}
 
