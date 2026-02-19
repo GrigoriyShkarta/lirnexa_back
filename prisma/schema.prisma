@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  name            String
+  password        String
+  role            Role             @default(student)
+  birthday        DateTime?
+  city            String?
+  telegram        String?
+  instagram       String?
+  avatar          String?
+  super_admin_id  String?
+  created_at      DateTime         @default(now()) @map("created_at")
+  updated_at      DateTime         @updatedAt @map("updated_at")
+  is_premium      Boolean          @default(false) @map("is_premium")
+  teacher_id      String?
+  personalization Personalization?
+  super_admin     User?            @relation("UserToSuperAdmin", fields: [super_admin_id], references: [id])
+  subordinates    User[]           @relation("UserToSuperAdmin")
+  teacher         User?            @relation("TeacherToStudent", fields: [teacher_id], references: [id])
+  students        User[]           @relation("TeacherToStudent")
+  audios          Audio[]          @relation("SuperAdminToAudio")
+  photos          Photo[]          @relation("SuperAdminToPhoto")
+  videos          Video[]          @relation("SuperAdminToVideo")
+  files           MaterialFile[]   @relation("SuperAdminToFile")
+  lessons         Lesson[]         @relation("SuperAdminToLesson")
+  authored_lessons Lesson[]        @relation("UserToLesson")
+  courses         Course[]         @relation("SuperAdminToCourse")
+  authored_courses Course[]        @relation("UserToCourse")
+  managed_categories Category[]       @relation("SuperAdminToCategory")
+  categories         Category[]       @relation("CategoryToUser")
+
+  @@map("users")
+}
+
+model Personalization {
+  id                     String   @id @default(uuid())
+  title_space            String   @default("Lirnexa") @map("title_space")
+  icon                   String   @default("")
+  languages              String[] @default(["uk"])
+  select_mode            Boolean  @default(false) @map("select_mode")
+  bg_color               String   @default("#ffffff") @map("bg_color")
+  primary_color          String   @default("#2563eb") @map("primary_color")
+  secondary_color        String   @default("#64748b") @map("secondary_color")
+  bg_color_dark          String   @default("#0f0f0f") @map("bg_color_dark")
+  user_id                String   @unique @map("user_id")
+  created_at             DateTime @default(now()) @map("created_at")
+  updated_at             DateTime @updatedAt @map("updated_at")
+  is_white_sidebar_color Boolean  @default(true) @map("is_white_sidebar_color")
+  is_show_sidebar_icon   Boolean  @default(false) @map("is_show_sidebar_icon")
+  font_family            String   @default("inter") @map("font_family")
+  user                   User     @relation(fields: [user_id], references: [id])
+
+  @@map("spaces")
+}
+
+model Audio {
+  id         String   @id @default(uuid())
+  name       String
+  file_url   String   @map("file_url")
+  file_key   String   @map("file_key")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  super_admin_id String?  @map("super_admin_id")
+  super_admin    User?    @relation("SuperAdminToAudio", fields: [super_admin_id], references: [id])
+  categories     Category[] @relation("CategoryToAudio")
+
+  @@map("audios")
+}
+
+model Photo {
+  id         String   @id @default(uuid())
+  name       String
+  file_url   String   @map("file_url")
+  file_key   String   @map("file_key")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  super_admin_id String?  @map("super_admin_id")
+  super_admin    User?    @relation("SuperAdminToPhoto", fields: [super_admin_id], references: [id])
+  categories     Category[] @relation("CategoryToPhoto")
+
+  @@map("photos")
+}
+
+model Video {
+  id         String   @id @default(uuid())
+  name       String
+  file_url   String   @map("file_url")
+  file_key   String?  @map("file_key")
+  is_link    Boolean  @default(false) @map("is_link")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  super_admin_id String?  @map("super_admin_id")
+  super_admin    User?    @relation("SuperAdminToVideo", fields: [super_admin_id], references: [id])
+  categories     Category[] @relation("CategoryToVideo")
+
+  @@map("videos")
+}
+
+model MaterialFile {
+  id         String   @id @default(uuid())
+  name       String
+  file_url   String   @map("file_url")
+  file_key   String   @map("file_key")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  super_admin_id String?  @map("super_admin_id")
+  super_admin    User?    @relation("SuperAdminToFile", fields: [super_admin_id], references: [id])
+  categories     Category[] @relation("CategoryToFile")
+
+  @@map("files")
+}
+
+enum Role {
+  super_admin
+  admin
+  teacher
+  student
+}
+
+model Lesson {
+  id              String   @id @default(uuid())
+  name            String
+  cover_url       String?  @map("cover_url")
+  cover_position  Int      @default(0) @map("cover_position")
+  content         Json     @default("[]")
+  duration        Int?     @map("duration")
+  author_id       String   @map("author_id")
+  super_admin_id  String?  @map("super_admin_id")
+  created_at      DateTime @default(now()) @map("created_at")
+  updated_at      DateTime @updatedAt @map("updated_at")
+
+  author          User     @relation("UserToLesson", fields: [author_id], references: [id])
+  super_admin     User?    @relation("SuperAdminToLesson", fields: [super_admin_id], references: [id])
+  categories      Category[] @relation("CategoryToLesson")
+
+  @@map("lessons")
+}
+model Category {
+  id              String   @id @default(uuid())
+  name            String
+  color           String?
+  super_admin_id  String?  @map("super_admin_id")
+  created_at      DateTime @default(now()) @map("created_at")
+  updated_at      DateTime @updatedAt @map("updated_at")
+
+  super_admin     User?    @relation("SuperAdminToCategory", fields: [super_admin_id], references: [id])
+  users           User[]   @relation("CategoryToUser")
+  audios          Audio[]  @relation("CategoryToAudio")
+  photos          Photo[]  @relation("CategoryToPhoto")
+  videos          Video[]  @relation("CategoryToVideo")
+  files           MaterialFile[] @relation("CategoryToFile")
+  lessons         Lesson[] @relation("CategoryToLesson")
+  courses         Course[] @relation("CategoryToCourse")
+
+  @@map("categories")
+}
+
+model Course {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  image_url       String?  @map("image_url")
+  content         Json     @default("[]")
+  author_id       String   @map("author_id")
+  super_admin_id  String?  @map("super_admin_id")
+  created_at      DateTime @default(now()) @map("created_at")
+  updated_at      DateTime @updatedAt @map("updated_at")
+
+  author          User     @relation("UserToCourse", fields: [author_id], references: [id])
+  super_admin     User?    @relation("SuperAdminToCourse", fields: [super_admin_id], references: [id])
+  categories      Category[] @relation("CategoryToCourse")
+
+  @@map("courses")
+}
