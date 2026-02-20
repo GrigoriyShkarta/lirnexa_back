@@ -37,8 +37,29 @@ model User {
   authored_courses Course[]        @relation("UserToCourse")
   managed_categories Category[]       @relation("SuperAdminToCategory")
   categories         Category[]       @relation("CategoryToUser")
+  subscriptions   Subscription[]   @relation("SuperAdminToSubscription")
+  authored_subscriptions Subscription[] @relation("UserToSubscription")
+  student_subscriptions Subscription[] @relation("StudentToSubscription")
 
   @@map("users")
+}
+
+model Subscription {
+  id              String   @id @default(uuid())
+  name            String
+  price           Float
+  lessons_count   Int      @map("lessons_count")
+  author_id       String   @map("author_id")
+  super_admin_id  String?  @map("super_admin_id")
+  student_id      String?  @map("student_id")
+  created_at      DateTime @default(now()) @map("created_at")
+  updated_at      DateTime @updatedAt @map("updated_at")
+
+  author          User     @relation("UserToSubscription", fields: [author_id], references: [id])
+  super_admin     User?    @relation("SuperAdminToSubscription", fields: [super_admin_id], references: [id])
+  student         User?    @relation("StudentToSubscription", fields: [student_id], references: [id])
+
+  @@map("subscriptions")
 }
 
 model Personalization {

@@ -6,6 +6,7 @@ import { SpaceModule } from './modules/space/space.module';
 import { UserModule } from './modules/user/user.module';
 import { MaterialsModule } from './modules/materials/materials.module';
 import { CategoryModule } from './modules/category/category.module';
+import { SubscriptionModule } from './modules/finance/subscription/subscription.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CategoryModule } from './modules/category/category.module';
     UserModule,
     MaterialsModule,
     CategoryModule,
+    SubscriptionModule,
   ],
 })
 /**

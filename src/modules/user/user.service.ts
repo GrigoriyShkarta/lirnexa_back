@@ -346,6 +346,52 @@ export class UserService {
   }
 
   /**
+   * Retrieves a specific user's information by ID with permission checks.
+   * @param requester_id ID of the user making the request.
+   * @param requester_role Role of the requester.
+   * @param target_user_id ID of the user being retrieved.
+   */
+  async get_user_by_id(
+    requester_id: string,
+    requester_role: Role,
+    target_user_id: string,
+  ): Promise<UserProfileResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: target_user_id },
+      select: { id: true, super_admin_id: true, teacher_id: true, role: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Permission check
+    let has_permission = false;
+
+    if (requester_id === target_user_id) {
+      has_permission = true;
+    } else if (requester_role === Role.super_admin && user.super_admin_id === requester_id) {
+      has_permission = true;
+    } else if (requester_role === Role.admin) {
+      const requester = await this.prisma.user.findUnique({
+        where: { id: requester_id },
+        select: { super_admin_id: true },
+      });
+      if (requester?.super_admin_id === user.super_admin_id) {
+        has_permission = true;
+      }
+    } else if (requester_role === Role.teacher && user.teacher_id === requester_id) {
+      has_permission = true;
+    }
+
+    if (!has_permission) {
+      throw new BadRequestException('You do not have permission to view this user');
+    }
+
+    return this.get_me(target_user_id);
+  }
+
+  /**
    * Updates an existing user's information.
    * @param requester_id ID of the user making the update request.
    * @param requester_role Role of the requester.

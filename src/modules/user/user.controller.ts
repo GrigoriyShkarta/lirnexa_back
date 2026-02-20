@@ -91,6 +91,21 @@ export class UserController {
     return this.user_service.get_users(req.user.sub, req.user.role, query);
   }
 
+  @Get(':id')
+  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  @ApiOperation({ summary: 'Get a specific user by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'User retrieved successfully',
+    type: UserProfileResponse,
+  })
+  async get_user_by_id(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<UserProfileResponse> {
+    return this.user_service.get_user_by_id(req.user.sub, req.user.role, id);
+  }
+
   @Patch(':id')
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiConsumes('multipart/form-data')
@@ -101,6 +116,8 @@ export class UserController {
     @Body() dto: UpdateUserDto,
     @UploadedFile() avatar_file?: Express.Multer.File,
   ): Promise<{ message: string }> {
+    console.log('dto', dto)
+    console.log('avatar_file', avatar_file)
     return this.user_service.update_user(req.user.sub, req.user.role, id, dto, avatar_file);
   }
 
