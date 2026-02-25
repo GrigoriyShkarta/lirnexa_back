@@ -75,6 +75,18 @@ export class AuthService {
       throw new BadRequestException('wrong_email_or_password');
     }
 
+    if (user.deactivation_date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(user.deactivation_date) <= today) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { status: 'inactive' },
+        });
+        throw new BadRequestException('user_is_inactive');
+      }
+    }
+
     const tokens = await this.generate_tokens(user);
     this.set_tokens_to_cookies(res, tokens.access_token, tokens.refresh_token);
 
@@ -111,6 +123,18 @@ export class AuthService {
 
       if (!user) {
         throw new NotFoundException('invalid_credentional');
+      }
+
+      if (user.deactivation_date) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (new Date(user.deactivation_date) <= today) {
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { status: 'inactive' },
+          });
+          throw new UnauthorizedException('user_is_inactive');
+        }
       }
 
       const tokens = await this.generate_tokens(user);

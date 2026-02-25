@@ -21,7 +21,12 @@ model User {
   created_at      DateTime         @default(now()) @map("created_at")
   updated_at      DateTime         @updatedAt @map("updated_at")
   is_premium      Boolean          @default(false) @map("is_premium")
+  status              UserStatus       @default(active)
+  is_avatar_locked    Boolean          @default(false) @map("is_avatar_locked")
+  is_name_locked      Boolean          @default(false) @map("is_name_locked")
+  deactivation_date   DateTime?        @map("deactivation_date")
   teacher_id      String?
+  learning_goals  String?          @map("learning_goals")
   personalization Personalization?
   super_admin     User?            @relation("UserToSuperAdmin", fields: [super_admin_id], references: [id])
   subordinates    User[]           @relation("UserToSuperAdmin")
@@ -39,7 +44,7 @@ model User {
   categories         Category[]       @relation("CategoryToUser")
   subscriptions   Subscription[]   @relation("SuperAdminToSubscription")
   authored_subscriptions Subscription[] @relation("UserToSubscription")
-  student_subscriptions Subscription[] @relation("StudentToSubscription")
+  purchased_subscriptions StudentSubscription[] @relation("StudentToSubscription")
 
   @@map("users")
 }
@@ -51,15 +56,67 @@ model Subscription {
   lessons_count   Int      @map("lessons_count")
   author_id       String   @map("author_id")
   super_admin_id  String?  @map("super_admin_id")
-  student_id      String?  @map("student_id")
   created_at      DateTime @default(now()) @map("created_at")
   updated_at      DateTime @updatedAt @map("updated_at")
 
   author          User     @relation("UserToSubscription", fields: [author_id], references: [id])
   super_admin     User?    @relation("SuperAdminToSubscription", fields: [super_admin_id], references: [id])
-  student         User?    @relation("StudentToSubscription", fields: [student_id], references: [id])
+  student_subscriptions StudentSubscription[]
 
   @@map("subscriptions")
+}
+
+model StudentSubscription {
+  id              String         @id @default(uuid())
+  price           Float
+  paid_amount     Float          @default(0) @map("paid_amount")
+  payment_status  PaymentStatus  @default(unpaid) @map("payment_status")
+  payment_date    DateTime?      @map("payment_date")
+  partial_payment_date DateTime? @map("partial_payment_date")
+  next_payment_date DateTime?    @map("next_payment_date")
+  payment_reminder  Boolean      @default(false) @map("payment_reminder")
+  selected_days   String[]       @default([]) @map("selected_days")
+  student_id      String         @map("student_id")
+  subscription_id String         @map("subscription_id")
+  created_at      DateTime       @default(now()) @map("created_at")
+  updated_at      DateTime       @updatedAt @map("updated_at")
+
+  student         User           @relation("StudentToSubscription", fields: [student_id], references: [id])
+  subscription    Subscription   @relation(fields: [subscription_id], references: [id])
+  lessons         SubscriptionLesson[]
+
+  @@map("student_subscriptions")
+}
+
+model SubscriptionLesson {
+  id                      String                   @id @default(uuid())
+  student_subscription_id String                   @map("student_subscription_id")
+  date                    DateTime?
+  status                  SubscriptionLessonStatus @default(scheduled)
+  created_at              DateTime                 @default(now()) @map("created_at")
+  updated_at              DateTime                 @updatedAt @map("updated_at")
+
+  subscription            StudentSubscription      @relation(fields: [student_subscription_id], references: [id], onDelete: Cascade)
+
+  @@map("subscription_lessons")
+}
+
+enum PaymentStatus {
+  paid
+  unpaid
+  partially_paid
+}
+
+enum SubscriptionLessonStatus {
+  attended
+  scheduled
+  burned
+  rescheduled
+}
+
+enum UserStatus {
+  active
+  inactive
 }
 
 model Personalization {

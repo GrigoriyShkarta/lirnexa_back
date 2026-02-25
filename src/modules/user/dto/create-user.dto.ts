@@ -7,9 +7,10 @@ import {
   IsDateString,
   IsEnum,
   IsArray,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 
 /**
  * Data transfer object for creating a new user.
@@ -61,6 +62,11 @@ export class CreateUserDto {
   @IsOptional()
   teacher_id?: string;
 
+  @ApiPropertyOptional({ example: 'Improve my speaking skills', description: 'Learning goals' })
+  @IsString()
+  @IsOptional()
+  learning_goals?: string;
+
   @ApiPropertyOptional({ type: 'string', format: 'binary', description: 'User avatar file' })
   @IsOptional()
   avatar?: any;
@@ -70,4 +76,24 @@ export class CreateUserDto {
   @IsString({ each: true })
   @IsOptional()
   categories?: string[];
+
+  @ApiPropertyOptional({ enum: UserStatus, example: UserStatus.active, description: 'User status' })
+  @IsEnum(UserStatus)
+  @IsOptional()
+  status?: UserStatus;
+
+  @ApiPropertyOptional({ example: false, description: 'Is avatar locked' })
+  @IsBoolean()
+  @IsOptional()
+  is_avatar_locked?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Is name locked' })
+  @IsBoolean()
+  @IsOptional()
+  is_name_locked?: boolean;
+
+  @ApiPropertyOptional({ example: '2026-03-01', description: 'Deactivation date' })
+  @IsDateString()
+  @IsOptional()
+  deactivation_date?: string;
 }

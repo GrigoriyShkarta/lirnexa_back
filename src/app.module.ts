@@ -7,10 +7,12 @@ import { UserModule } from './modules/user/user.module';
 import { MaterialsModule } from './modules/materials/materials.module';
 import { CategoryModule } from './modules/category/category.module';
 import { SubscriptionModule } from './modules/finance/subscription/subscription.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     SpaceModule,

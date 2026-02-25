@@ -16,9 +16,4 @@ export class CreateSubscriptionDto {
   @IsNumber()
   @IsNotEmpty({ message: 'subscription_lessons_count_required' })
   lessons_count: number;
-
-  @ApiProperty({ example: 'student-uuid', description: 'Student ID', required: false })
-  @IsString()
-  @IsOptional()
-  student_id?: string;
 }

@@ -39,6 +39,11 @@ export const USER_SELECT_FIELDS = {
   super_admin_id: true,
   teacher_id: true,
   is_premium: true,
+  learning_goals: true,
+  status: true,
+  is_avatar_locked: true,
+  is_name_locked: true,
+  deactivation_date: true,
   personalization: {
     select: PERSONALIZATION_SELECT_FIELDS,
   },
@@ -63,6 +68,11 @@ export const USER_LIST_SELECT_FIELDS = {
   super_admin_id: true,
   teacher_id: true,
   is_premium: true,
+  learning_goals: true,
+  status: true,
+  is_avatar_locked: true,
+  is_name_locked: true,
+  deactivation_date: true,
   categories: {
     select: SELECT_CATEGORIES,
   },

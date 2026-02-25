@@ -69,6 +69,11 @@ export class UserService {
         city: dto.city,
         telegram: dto.telegram,
         instagram: dto.instagram,
+        learning_goals: dto.learning_goals,
+        status: dto.status || 'active',
+        is_avatar_locked: dto.is_avatar_locked ?? false,
+        is_name_locked: dto.is_name_locked ?? false,
+        deactivation_date: dto.deactivation_date ? new Date(dto.deactivation_date) : null,
         super_admin_id,
         teacher_id: dto.teacher_id || (creator_role === Role.teacher ? creator_id : null),
         categories: dto.categories ? { connect: dto.categories.map((id) => ({ id })) } : undefined,
@@ -101,6 +106,19 @@ export class UserService {
 
     if (!user) {
       throw new BadRequestException('User not found');
+    }
+
+    // Lazy deactivation check
+    if (user.status === 'active' && user.deactivation_date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(user.deactivation_date) <= today) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { status: 'inactive' },
+        });
+        user.status = 'inactive';
+      }
     }
 
     // Inheritance logic: non-super_admin users inherit space settings from their super_admin
@@ -175,6 +193,14 @@ export class UserService {
       }
     }
 
+    if (dto.name && dto.name !== user.name && user.is_name_locked) {
+      throw new BadRequestException([{ name: 'name_is_locked' }]);
+    }
+
+    if (avatar_file && user.is_avatar_locked) {
+      throw new BadRequestException([{ avatar: 'avatar_is_locked' }]);
+    }
+
     const update_data: Prisma.UserUpdateInput = {
       name: dto.name,
       email: dto.email,
@@ -182,6 +208,7 @@ export class UserService {
       city: dto.city,
       telegram: dto.telegram,
       instagram: dto.instagram,
+      learning_goals: dto.learning_goals,
     };
 
     if (avatar_file) {
@@ -262,6 +289,18 @@ export class UserService {
     requester_role: Role,
     query: UserQueryDto,
   ): Promise<PaginatedUserListResponse> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Bulk deactivation check before listing
+    await this.prisma.user.updateMany({
+      where: {
+        status: 'active',
+        deactivation_date: { lte: today },
+      },
+      data: { status: 'inactive' },
+    });
+
     const { page = 1, limit = 10, search, role } = query;
     let category_ids = query.category_ids;
 
@@ -324,13 +363,26 @@ export class UserService {
       };
     }
 
+    const select: any = { ...USER_LIST_SELECT_FIELDS };
+    if (query.include_subscriptions) {
+      select.purchased_subscriptions = {
+        include: {
+          subscription: true,
+          lessons: true,
+        },
+      };
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
-        select: USER_LIST_SELECT_FIELDS,
+        select,
         skip,
         take: limit,
-        orderBy: { created_at: 'desc' },
+        orderBy: [
+          { status: 'asc' },
+          { created_at: 'desc' },
+        ],
       }),
       this.prisma.user.count({ where }),
     ]);
@@ -454,8 +506,24 @@ export class UserService {
       city: dto.city,
       telegram: dto.telegram,
       instagram: dto.instagram,
+      learning_goals: dto.learning_goals,
       categories: dto.categories ? { set: dto.categories.map((id) => ({ id })) } : undefined,
+      status: dto.status,
+      is_name_locked: dto.is_name_locked,
+      is_avatar_locked: dto.is_avatar_locked,
     };
+
+    if (dto.deactivation_date) {
+      const deactivationDate = new Date(dto.deactivation_date);
+      deactivationDate.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (deactivationDate <= today) {
+        update_data.status = 'inactive';
+      }
+      update_data.deactivation_date = deactivationDate;
+    }
 
     if (dto.teacher_id !== undefined) {
       if (dto.teacher_id === null || dto.teacher_id === '') {

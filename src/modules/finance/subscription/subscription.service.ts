@@ -4,6 +4,9 @@ import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { SubscriptionQueryDto } from './dto/subscription-query.dto';
 import { Role } from '@prisma/client';
+import { CreateStudentSubscriptionDto } from './dto/create-student-subscription.dto';
+import { UpdateStudentSubscriptionDto } from './dto/update-student-subscription.dto';
+import { UpdateLessonStatusDto } from './dto/update-lesson-status.dto';
 
 @Injectable()
 export class SubscriptionService {
@@ -32,14 +35,13 @@ export class SubscriptionService {
   }
 
   async get_all(userId: string, query: SubscriptionQueryDto) {
-    const { search, page = 1, limit = 10, student_id } = query;
+    const { search, page = 1, limit = 10 } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
       OR: [
         { author_id: userId },
         { super_admin_id: userId },
-        { student_id: userId },
       ],
     };
 
@@ -50,10 +52,6 @@ export class SubscriptionService {
       };
     }
 
-    if (student_id) {
-      where.student_id = student_id;
-    }
-
     const [data, total] = await Promise.all([
       this.prisma.subscription.findMany({
         where,
@@ -62,14 +60,6 @@ export class SubscriptionService {
         orderBy: { created_at: 'desc' },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatar: true,
-            },
-          },
-          student: {
             select: {
               id: true,
               name: true,
@@ -105,14 +95,6 @@ export class SubscriptionService {
             avatar: true,
           },
         },
-        student: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-          },
-        },
       },
     });
 
@@ -141,6 +123,240 @@ export class SubscriptionService {
       where: {
         id: { in: ids },
       },
+    });
+  }
+
+  // --- Student Subscription Logic ---
+
+  async assignToStudent(dto: CreateStudentSubscriptionDto) {
+    const template = await this.prisma.subscription.findUnique({
+      where: { id: dto.subscription_id },
+    });
+
+    if (!template) {
+      throw new NotFoundException('Subscription template not found');
+    }
+
+    const lessonsCount = template.lessons_count;
+
+    // Use default payment date if not provided
+    const paymentDate = dto.payment_date ? new Date(dto.payment_date) : new Date();
+
+    const studentSubscription = await this.prisma.studentSubscription.create({
+      data: {
+        price: template.price,
+        paid_amount: dto.paid_amount ?? 0,
+        payment_status: dto.payment_status ?? 'unpaid',
+        payment_date: paymentDate,
+        partial_payment_date: dto.partial_payment_date ? new Date(dto.partial_payment_date) : null,
+        next_payment_date: dto.next_payment_date ? new Date(dto.next_payment_date) : null,
+        payment_reminder: dto.payment_reminder ?? false,
+        selected_days: dto.selected_days ?? [],
+        student_id: dto.student_id,
+        subscription_id: dto.subscription_id,
+        lessons: {
+          create: Array.from({ length: lessonsCount }).map((_, i) => ({
+            date: dto.lesson_dates?.[i] ? new Date(dto.lesson_dates[i]) : null,
+            status: 'scheduled',
+          })),
+        },
+      },
+      include: {
+        lessons: true,
+        subscription: true,
+      },
+    });
+
+    return studentSubscription;
+  }
+
+  async getStudentSubscriptions(studentId: string) {
+    const now = new Date();
+
+    // Automatically mark past lessons as 'attended' unless they are 'burned' or already 'attended'
+    await this.prisma.subscriptionLesson.updateMany({
+      where: {
+        subscription: { student_id: studentId },
+        date: { lt: now },
+        status: 'scheduled',
+      },
+      data: { status: 'attended' },
+    });
+
+    const subscriptions = await this.prisma.studentSubscription.findMany({
+      where: { student_id: studentId },
+      include: {
+        lessons: {
+          orderBy: { date: 'asc' },
+        },
+        subscription: {
+          select: {
+            id: true,
+            name: true,
+            lessons_count: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+
+    // Final in-memory sort to ensure they are ordered by lesson dates
+    return subscriptions.sort((a, b) => {
+      const aFirstLesson = b.lessons.find((l) => l.date);
+      const bFirstLesson = a.lessons.find((l) => l.date);
+
+      if (!aFirstLesson && !bFirstLesson) return 0;
+      if (!aFirstLesson) return 1;
+      if (!bFirstLesson) return -1;
+
+      return (aFirstLesson.date?.getTime() || 0) - (bFirstLesson.date?.getTime() || 0);
+    });
+  }
+
+  async updateStudentSubscription(id: string, dto: UpdateStudentSubscriptionDto) {
+    const current = await this.prisma.studentSubscription.findUnique({
+      where: { id },
+      select: { price: true, paid_amount: true },
+    });
+
+    if (!current) {
+      throw new NotFoundException(`Student subscription with ID ${id} not found`);
+    }
+
+    const data: any = { ...dto };
+
+    // Auto-calculate or explicitly handle payment status
+    if (dto.paid_amount !== undefined) {
+      const paidAmount = dto.paid_amount;
+      const price = current.price;
+
+      if (paidAmount >= price) {
+        data.payment_status = 'paid';
+      } else if (paidAmount > 0) {
+        data.payment_status = 'partially_paid';
+      } else {
+        data.payment_status = 'unpaid';
+      }
+    }
+
+    // Ensure partial_payment_date and paid_amount are handled correctly based on status
+    const finalStatus = data.payment_status ?? dto.payment_status;
+    if (finalStatus === 'paid') {
+      data.partial_payment_date = null;
+      data.paid_amount = current.price;
+      if (!dto.payment_date) {
+        data.payment_date = new Date();
+      }
+    } else if (finalStatus === 'unpaid') {
+      data.partial_payment_date = null;
+      data.paid_amount = 0;
+      data.payment_date = null;
+    } else if (finalStatus === 'partially_paid') {
+      if (dto.partial_payment_date) {
+        data.partial_payment_date = new Date(dto.partial_payment_date);
+      }
+    }
+
+    if (dto.payment_date) {
+      data.payment_date = new Date(dto.payment_date);
+    }
+    if (dto.next_payment_date) {
+      data.next_payment_date = new Date(dto.next_payment_date);
+    }
+    return this.prisma.studentSubscription.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async updateLessonStatus(lessonId: string, dto: UpdateLessonStatusDto) {
+    const current = await this.prisma.subscriptionLesson.findUnique({
+      where: { id: lessonId },
+    });
+
+    if (!current) {
+      throw new NotFoundException(`Lesson with ID ${lessonId} not found`);
+    }
+
+    const data: any = { ...dto };
+    const status = dto.status || current.status;
+
+    // For 'attended' and 'burned' statuses - do not touch the date unless provided
+    if (status === 'attended' || status === 'burned') {
+      if (dto.date !== undefined) {
+        data.date = dto.date ? new Date(dto.date) : null;
+      } else {
+        delete data.date;
+      }
+    } else {
+      // For 'scheduled' or 'rescheduled'
+      let dateToUse = dto.date !== undefined ? (dto.date ? new Date(dto.date) : null) : current.date;
+
+      // If the resulting date is in the past and we are in scheduled/rescheduled status, 
+      // clear it to null to prevent the auto-marker from flipping it back to 'attended'.
+      if (dateToUse && dateToUse < new Date()) {
+        data.date = null;
+      } else if (dto.date !== undefined) {
+        data.date = dateToUse;
+      }
+    }
+
+    return this.prisma.subscriptionLesson.update({
+      where: { id: lessonId },
+      data,
+    });
+  }
+
+  async removeStudentSubscription(id: string) {
+    return this.prisma.studentSubscription.delete({
+      where: { id },
+    });
+  }
+
+  async removeStudentSubscriptionsBulk(ids: string[]) {
+    return this.prisma.studentSubscription.deleteMany({
+      where: {
+        id: { in: ids },
+      },
+    });
+  }
+
+  async getAllStudentSubscriptions(userId: string, userRole: Role) {
+    let super_admin_id = userId;
+
+    if (userRole !== Role.super_admin) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { super_admin_id: true },
+      });
+      super_admin_id = user?.super_admin_id || userId;
+    }
+
+    return this.prisma.studentSubscription.findMany({
+      where: {
+        subscription: {
+          super_admin_id,
+        },
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true,
+            status: true,
+          },
+        },
+        subscription: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
     });
   }
 }

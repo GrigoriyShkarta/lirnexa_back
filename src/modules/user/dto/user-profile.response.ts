@@ -51,6 +51,21 @@ export class UserBaseResponse {
   @ApiPropertyOptional({ example: false, description: 'Is user premium' })
   is_premium: boolean;
 
+  @ApiPropertyOptional({ example: 'Improve my speaking skills', description: 'Learning goals' })
+  learning_goals: string | null;
+
+  @ApiPropertyOptional({ example: 'active', description: 'User status' })
+  status: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Is avatar locked' })
+  is_avatar_locked: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Is name locked' })
+  is_name_locked: boolean;
+
+  @ApiPropertyOptional({ example: '2020-01-01T00:00:00.000Z', description: 'Deactivation date' })
+  deactivation_date: Date | null;
+
   @ApiPropertyOptional({ type: () => [CategoryResponseDto], description: 'User categories' })
   user_categories?: CategoryResponseDto[] | null;
 }

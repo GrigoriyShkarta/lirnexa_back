@@ -92,7 +92,7 @@ export class UserController {
   }
 
   @Get(':id')
-  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  @Roles(Role.super_admin, Role.admin, Role.teacher, Role.student)
   @ApiOperation({ summary: 'Get a specific user by ID' })
   @ApiResponse({
     status: 200,
@@ -116,8 +116,6 @@ export class UserController {
     @Body() dto: UpdateUserDto,
     @UploadedFile() avatar_file?: Express.Multer.File,
   ): Promise<{ message: string }> {
-    console.log('dto', dto)
-    console.log('avatar_file', avatar_file)
     return this.user_service.update_user(req.user.sub, req.user.role, id, dto, avatar_file);
   }
 

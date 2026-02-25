@@ -39,4 +39,9 @@ export class UserQueryDto {
     return [];
   })
   category_ids?: string[];
+
+  @ApiPropertyOptional({ example: true, description: 'Include student subscriptions' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  include_subscriptions?: boolean;
 }
