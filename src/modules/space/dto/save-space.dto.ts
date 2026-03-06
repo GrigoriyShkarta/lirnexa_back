@@ -4,8 +4,9 @@ import {
   IsArray,
   ValidateIf,
   IsNotEmpty,
+  IsOptional,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 /**
@@ -61,4 +62,58 @@ export class SafeSpaceDto {
   @IsString()
   @IsNotEmpty()
   font_family: string;
+
+  @ApiProperty({ example: 'UAH', description: 'Default currency' })
+  @IsString()
+  @IsNotEmpty()
+  currency: string;
+
+  @ApiProperty({ example: 'Привіт, {name}!', description: 'Student dashboard title' })
+  @IsOptional()
+  @IsString()
+  student_dashboard_title?: string;
+
+  @ApiProperty({ example: 'Готовий до уроку?', description: 'Student dashboard description' })
+  @IsOptional()
+  @IsString()
+  student_dashboard_description?: string;
+
+  @ApiProperty({ example: 'Увага! 8 березня школа не працює.', description: 'Student announcement' })
+  @IsOptional()
+  @IsString()
+  student_announcement?: string;
+
+  @ApiProperty({ example: true, description: 'Show student progress' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  is_show_student_progress?: boolean;
+
+  @ApiProperty({ example: 'https://instagram.com/school', description: 'Instagram link' })
+  @IsOptional()
+  @IsString()
+  student_social_instagram?: string;
+
+  @ApiProperty({ example: 'https://t.me/support_bot', description: 'Telegram link' })
+  @IsOptional()
+  @IsString()
+  student_support_telegram?: string;
+
+  @ApiProperty({ example: 'Admin Dashboard', description: 'Admin dashboard title' })
+  @IsOptional()
+  @IsString()
+  dashboard_title?: string;
+
+  @ApiProperty({ example: 'Manage your school', description: 'Admin dashboard description' })
+  @IsOptional()
+  @IsString()
+  dashboard_description?: string;
+
+  @ApiPropertyOptional({ type: 'string', format: 'binary', description: 'Student dashboard hero image' })
+  @IsOptional()
+  student_dashboard_hero_image?: any;
+
+  @ApiPropertyOptional({ type: 'string', format: 'binary', description: 'Admin dashboard hero image' })
+  @IsOptional()
+  dashboard_hero_image?: any;
 }

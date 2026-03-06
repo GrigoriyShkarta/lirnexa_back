@@ -7,85 +7,121 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(uuid())
-  email           String           @unique
-  name            String
-  password        String
-  role            Role             @default(student)
-  birthday        DateTime?
-  city            String?
-  telegram        String?
-  instagram       String?
-  avatar          String?
-  super_admin_id  String?
-  created_at      DateTime         @default(now()) @map("created_at")
-  updated_at      DateTime         @updatedAt @map("updated_at")
-  is_premium      Boolean          @default(false) @map("is_premium")
-  status              UserStatus       @default(active)
-  is_avatar_locked    Boolean          @default(false) @map("is_avatar_locked")
-  is_name_locked      Boolean          @default(false) @map("is_name_locked")
-  deactivation_date   DateTime?        @map("deactivation_date")
-  teacher_id      String?
-  learning_goals  String?          @map("learning_goals")
-  personalization Personalization?
-  super_admin     User?            @relation("UserToSuperAdmin", fields: [super_admin_id], references: [id])
-  subordinates    User[]           @relation("UserToSuperAdmin")
-  teacher         User?            @relation("TeacherToStudent", fields: [teacher_id], references: [id])
-  students        User[]           @relation("TeacherToStudent")
-  audios          Audio[]          @relation("SuperAdminToAudio")
-  photos          Photo[]          @relation("SuperAdminToPhoto")
-  videos          Video[]          @relation("SuperAdminToVideo")
-  files           MaterialFile[]   @relation("SuperAdminToFile")
-  lessons         Lesson[]         @relation("SuperAdminToLesson")
-  authored_lessons Lesson[]        @relation("UserToLesson")
-  courses         Course[]         @relation("SuperAdminToCourse")
-  authored_courses Course[]        @relation("UserToCourse")
-  managed_categories Category[]       @relation("SuperAdminToCategory")
-  categories         Category[]       @relation("CategoryToUser")
-  subscriptions   Subscription[]   @relation("SuperAdminToSubscription")
-  authored_subscriptions Subscription[] @relation("UserToSubscription")
-  purchased_subscriptions StudentSubscription[] @relation("StudentToSubscription")
+  id                            String                @id @default(uuid())
+  email                         String                @unique
+  name                          String
+  password                      String
+  role                          Role                  @default(student)
+  birthday                      DateTime?
+  city                          String?
+  telegram                      String?
+  instagram                     String?
+  avatar                        String?
+  super_admin_id                String?
+  created_at                    DateTime              @default(now()) @map("created_at")
+  updated_at                    DateTime              @updatedAt @map("updated_at")
+  is_premium                    Boolean               @default(false) @map("is_premium")
+  status                        UserStatus            @default(active)
+  is_avatar_locked              Boolean               @default(false) @map("is_avatar_locked")
+  is_name_locked                Boolean               @default(false) @map("is_name_locked")
+  deactivation_date             DateTime?             @map("deactivation_date")
+  teacher_id                    String?
+  learning_goals                String?               @map("learning_goals")
+  personalization               Personalization?
+  super_admin                   User?                 @relation("UserToSuperAdmin", fields: [super_admin_id], references: [id])
+  subordinates                  User[]                @relation("UserToSuperAdmin")
+  teacher                       User?                 @relation("TeacherToStudent", fields: [teacher_id], references: [id])
+  students                      User[]                @relation("TeacherToStudent")
+  audios                        Audio[]               @relation("SuperAdminToAudio")
+  photos                        Photo[]               @relation("SuperAdminToPhoto")
+  videos                        Video[]               @relation("SuperAdminToVideo")
+  files                         MaterialFile[]        @relation("SuperAdminToFile")
+  lessons                       Lesson[]              @relation("SuperAdminToLesson")
+  authored_lessons              Lesson[]              @relation("UserToLesson")
+  courses                       Course[]              @relation("SuperAdminToCourse")
+  authored_courses              Course[]              @relation("UserToCourse")
+  managed_categories            Category[]            @relation("SuperAdminToCategory")
+  categories                    Category[]            @relation("CategoryToUser")
+  subscriptions                 Subscription[]        @relation("SuperAdminToSubscription")
+  authored_subscriptions        Subscription[]        @relation("UserToSubscription")
+  purchased_subscriptions       StudentSubscription[] @relation("StudentToSubscription")
+  managed_student_subscriptions StudentSubscription[] @relation("SuperAdminToStudentSubscription")
+  received_access               MaterialAccess[]      @relation("StudentToMaterialAccess")
+  granted_access                MaterialAccess[]      @relation("GranterToMaterialAccess")
+  transactions                  PaymentTransaction[]  @relation("StudentToTransaction")
+  managed_transactions          PaymentTransaction[]  @relation("SuperAdminToTransaction")
+
+  can_student_create_tracker    Boolean               @default(false) @map("can_student_create_tracker")
+  can_student_edit_tracker      Boolean               @default(false) @map("can_student_edit_tracker")
+
+  tracker_boards                TrackerBoard[]        @relation("StudentToTrackerBoard")
+  managed_tracker_boards        TrackerBoard[]        @relation("SuperAdminToTrackerBoard")
+  notifications                 Notification[]        @relation("UserToNotification")
 
   @@map("users")
 }
 
 model Subscription {
-  id              String   @id @default(uuid())
-  name            String
-  price           Float
-  lessons_count   Int      @map("lessons_count")
-  author_id       String   @map("author_id")
-  super_admin_id  String?  @map("super_admin_id")
-  created_at      DateTime @default(now()) @map("created_at")
-  updated_at      DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  name           String
+  price          Float
+  lessons_count  Int      @map("lessons_count")
+  author_id      String   @map("author_id")
+  super_admin_id String?  @map("super_admin_id")
+  created_at     DateTime @default(now()) @map("created_at")
+  updated_at     DateTime @updatedAt @map("updated_at")
 
-  author          User     @relation("UserToSubscription", fields: [author_id], references: [id])
-  super_admin     User?    @relation("SuperAdminToSubscription", fields: [super_admin_id], references: [id])
+  author                User                  @relation("UserToSubscription", fields: [author_id], references: [id])
+  super_admin           User?                 @relation("SuperAdminToSubscription", fields: [super_admin_id], references: [id])
   student_subscriptions StudentSubscription[]
 
   @@map("subscriptions")
 }
 
 model StudentSubscription {
-  id              String         @id @default(uuid())
-  price           Float
-  paid_amount     Float          @default(0) @map("paid_amount")
-  payment_status  PaymentStatus  @default(unpaid) @map("payment_status")
-  payment_date    DateTime?      @map("payment_date")
-  partial_payment_date DateTime? @map("partial_payment_date")
-  next_payment_date DateTime?    @map("next_payment_date")
-  payment_reminder  Boolean      @default(false) @map("payment_reminder")
-  selected_days   String[]       @default([]) @map("selected_days")
-  student_id      String         @map("student_id")
-  subscription_id String         @map("subscription_id")
-  created_at      DateTime       @default(now()) @map("created_at")
-  updated_at      DateTime       @updatedAt @map("updated_at")
+  id                   String        @id @default(uuid())
+  name                 String?
+  price                Float
+  lessons_count        Int?          @map("lessons_count")
+  paid_amount          Float         @default(0) @map("paid_amount")
+  payment_status       PaymentStatus @default(unpaid) @map("payment_status")
+  payment_date         DateTime?     @map("payment_date")
+  partial_payment_date DateTime?     @map("partial_payment_date")
+  next_payment_date    DateTime?     @map("next_payment_date")
+  payment_reminder     Boolean       @default(false) @map("payment_reminder")
+  selected_days        String[]      @default([]) @map("selected_days")
+  comment              String?       @map("comment")
+  student_id           String        @map("student_id")
+  subscription_id      String?       @map("subscription_id")
+  super_admin_id       String?       @map("super_admin_id")
+  created_at           DateTime      @default(now()) @map("created_at")
+  updated_at           DateTime      @updatedAt @map("updated_at")
 
-  student         User           @relation("StudentToSubscription", fields: [student_id], references: [id])
-  subscription    Subscription   @relation(fields: [subscription_id], references: [id])
-  lessons         SubscriptionLesson[]
+  student      User                 @relation("StudentToSubscription", fields: [student_id], references: [id])
+  subscription Subscription?        @relation(fields: [subscription_id], references: [id])
+  super_admin  User?                @relation("SuperAdminToStudentSubscription", fields: [super_admin_id], references: [id])
+  lessons      SubscriptionLesson[]
+  transactions PaymentTransaction[]
 
   @@map("student_subscriptions")
+}
+
+model PaymentTransaction {
+  id                      String   @id @default(uuid())
+  amount                  Float
+  payment_date            DateTime @default(now()) @map("payment_date")
+  student_subscription_id String   @map("student_subscription_id")
+  super_admin_id          String?  @map("super_admin_id")
+  student_id              String?  @map("student_id")
+  comment                 String?
+  created_at              DateTime @default(now()) @map("created_at")
+  updated_at              DateTime @updatedAt @map("updated_at")
+
+  subscription StudentSubscription @relation(fields: [student_subscription_id], references: [id], onDelete: Cascade)
+  student      User?               @relation("StudentToTransaction", fields: [student_id], references: [id])
+  super_admin  User?               @relation("SuperAdminToTransaction", fields: [super_admin_id], references: [id])
+
+  @@map("payment_transactions")
 }
 
 model SubscriptionLesson {
@@ -96,7 +132,7 @@ model SubscriptionLesson {
   created_at              DateTime                 @default(now()) @map("created_at")
   updated_at              DateTime                 @updatedAt @map("updated_at")
 
-  subscription            StudentSubscription      @relation(fields: [student_subscription_id], references: [id], onDelete: Cascade)
+  subscription StudentSubscription @relation(fields: [student_subscription_id], references: [id], onDelete: Cascade)
 
   @@map("subscription_lessons")
 }
@@ -135,9 +171,29 @@ model Personalization {
   is_white_sidebar_color Boolean  @default(true) @map("is_white_sidebar_color")
   is_show_sidebar_icon   Boolean  @default(false) @map("is_show_sidebar_icon")
   font_family            String   @default("inter") @map("font_family")
+  currency               String   @default("UAH") @map("currency")
   user                   User     @relation(fields: [user_id], references: [id])
+  dashboard_personalization DashboardPersonalization?
 
   @@map("spaces")
+}
+
+model DashboardPersonalization {
+  id                            String   @id @default(uuid())
+  student_dashboard_title       String?  @map("student_dashboard_title")
+  student_dashboard_description String?  @map("student_dashboard_description")
+  student_dashboard_hero_image  String?  @map("student_dashboard_hero_image")
+  student_announcement          String?  @map("student_announcement")
+  is_show_student_progress      Boolean  @default(false) @map("is_show_student_progress")
+  student_social_instagram      String?  @map("student_social_instagram")
+  student_support_telegram      String?  @map("student_support_telegram")
+  dashboard_title               String?  @map("dashboard_title")
+  dashboard_description         String?  @map("dashboard_description")
+  dashboard_hero_image          String?  @map("dashboard_hero_image")
+  personalization_id            String   @unique @map("personalization_id")
+  personalization               Personalization @relation(fields: [personalization_id], references: [id], onDelete: Cascade)
+
+  @@map("dashboard_personalizations")
 }
 
 model Audio {
@@ -148,9 +204,10 @@ model Audio {
   created_at DateTime @default(now()) @map("created_at")
   updated_at DateTime @updatedAt @map("updated_at")
 
-  super_admin_id String?  @map("super_admin_id")
-  super_admin    User?    @relation("SuperAdminToAudio", fields: [super_admin_id], references: [id])
-  categories     Category[] @relation("CategoryToAudio")
+  super_admin_id String?          @map("super_admin_id")
+  super_admin    User?            @relation("SuperAdminToAudio", fields: [super_admin_id], references: [id])
+  categories     Category[]       @relation("CategoryToAudio")
+  access         MaterialAccess[]
 
   @@map("audios")
 }
@@ -163,9 +220,10 @@ model Photo {
   created_at DateTime @default(now()) @map("created_at")
   updated_at DateTime @updatedAt @map("updated_at")
 
-  super_admin_id String?  @map("super_admin_id")
-  super_admin    User?    @relation("SuperAdminToPhoto", fields: [super_admin_id], references: [id])
-  categories     Category[] @relation("CategoryToPhoto")
+  super_admin_id String?          @map("super_admin_id")
+  super_admin    User?            @relation("SuperAdminToPhoto", fields: [super_admin_id], references: [id])
+  categories     Category[]       @relation("CategoryToPhoto")
+  access         MaterialAccess[]
 
   @@map("photos")
 }
@@ -179,9 +237,10 @@ model Video {
   created_at DateTime @default(now()) @map("created_at")
   updated_at DateTime @updatedAt @map("updated_at")
 
-  super_admin_id String?  @map("super_admin_id")
-  super_admin    User?    @relation("SuperAdminToVideo", fields: [super_admin_id], references: [id])
-  categories     Category[] @relation("CategoryToVideo")
+  super_admin_id String?          @map("super_admin_id")
+  super_admin    User?            @relation("SuperAdminToVideo", fields: [super_admin_id], references: [id])
+  categories     Category[]       @relation("CategoryToVideo")
+  access         MaterialAccess[]
 
   @@map("videos")
 }
@@ -194,9 +253,10 @@ model MaterialFile {
   created_at DateTime @default(now()) @map("created_at")
   updated_at DateTime @updatedAt @map("updated_at")
 
-  super_admin_id String?  @map("super_admin_id")
-  super_admin    User?    @relation("SuperAdminToFile", fields: [super_admin_id], references: [id])
-  categories     Category[] @relation("CategoryToFile")
+  super_admin_id String?          @map("super_admin_id")
+  super_admin    User?            @relation("SuperAdminToFile", fields: [super_admin_id], references: [id])
+  categories     Category[]       @relation("CategoryToFile")
+  access         MaterialAccess[]
 
   @@map("files")
 }
@@ -208,59 +268,176 @@ enum Role {
   student
 }
 
-model Lesson {
-  id              String   @id @default(uuid())
-  name            String
-  cover_url       String?  @map("cover_url")
-  cover_position  Int      @default(0) @map("cover_position")
-  content         Json     @default("[]")
-  duration        Int?     @map("duration")
-  author_id       String   @map("author_id")
-  super_admin_id  String?  @map("super_admin_id")
-  created_at      DateTime @default(now()) @map("created_at")
-  updated_at      DateTime @updatedAt @map("updated_at")
-  is_copying_disabled Boolean @default(false) @map("is_copying_disabled")
+enum MaterialType {
+  lesson
+  photo
+  video
+  audio
+  file
+}
 
-  author          User     @relation("UserToLesson", fields: [author_id], references: [id])
-  super_admin     User?    @relation("SuperAdminToLesson", fields: [super_admin_id], references: [id])
-  categories      Category[] @relation("CategoryToLesson")
+model MaterialAccess {
+  id            String       @id @default(uuid())
+  material_id   String       @map("material_id")
+  material_type MaterialType @map("material_type")
+  student_id    String       @map("student_id")
+  granted_by_id String       @map("granted_by_id")
+
+  lesson_id String? @map("lesson_id")
+  photo_id  String? @map("photo_id")
+  video_id  String? @map("video_id")
+  audio_id  String? @map("audio_id")
+  file_id   String? @map("file_id")
+
+  full_access       Boolean  @default(true) @map("full_access")
+  accessible_blocks String[] @default([]) @map("accessible_blocks")
+
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  student    User @relation("StudentToMaterialAccess", fields: [student_id], references: [id], onDelete: Cascade)
+  granted_by User @relation("GranterToMaterialAccess", fields: [granted_by_id], references: [id])
+
+  lesson Lesson?       @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+  photo  Photo?        @relation(fields: [photo_id], references: [id], onDelete: Cascade)
+  video  Video?        @relation(fields: [video_id], references: [id], onDelete: Cascade)
+  audio  Audio?        @relation(fields: [audio_id], references: [id], onDelete: Cascade)
+  file   MaterialFile? @relation(fields: [file_id], references: [id], onDelete: Cascade)
+
+  @@unique([student_id, material_type, material_id])
+  @@map("material_access")
+}
+
+model Lesson {
+  id                  String   @id @default(uuid())
+  name                String
+  cover_url           String?  @map("cover_url")
+  cover_position      Int      @default(0) @map("cover_position")
+  content             Json     @default("[]")
+  duration            Int?     @map("duration")
+  author_id           String   @map("author_id")
+  super_admin_id      String?  @map("super_admin_id")
+  created_at          DateTime @default(now()) @map("created_at")
+  updated_at          DateTime @updatedAt @map("updated_at")
+  is_copying_disabled   Boolean  @default(false) @map("is_copying_disabled")
+  add_files_to_materials Boolean  @default(true) @map("add_files_to_materials")
+
+  author      User             @relation("UserToLesson", fields: [author_id], references: [id])
+  super_admin User?            @relation("SuperAdminToLesson", fields: [super_admin_id], references: [id])
+  categories  Category[]       @relation("CategoryToLesson")
+  access      MaterialAccess[]
 
   @@map("lessons")
 }
-model Category {
-  id              String   @id @default(uuid())
-  name            String
-  color           String?
-  super_admin_id  String?  @map("super_admin_id")
-  created_at      DateTime @default(now()) @map("created_at")
-  updated_at      DateTime @updatedAt @map("updated_at")
 
-  super_admin     User?    @relation("SuperAdminToCategory", fields: [super_admin_id], references: [id])
-  users           User[]   @relation("CategoryToUser")
-  audios          Audio[]  @relation("CategoryToAudio")
-  photos          Photo[]  @relation("CategoryToPhoto")
-  videos          Video[]  @relation("CategoryToVideo")
-  files           MaterialFile[] @relation("CategoryToFile")
-  lessons         Lesson[] @relation("CategoryToLesson")
-  courses         Course[] @relation("CategoryToCourse")
+model Category {
+  id             String   @id @default(uuid())
+  name           String
+  color          String?
+  super_admin_id String?  @map("super_admin_id")
+  created_at     DateTime @default(now()) @map("created_at")
+  updated_at     DateTime @updatedAt @map("updated_at")
+
+  super_admin User?          @relation("SuperAdminToCategory", fields: [super_admin_id], references: [id])
+  users       User[]         @relation("CategoryToUser")
+  audios      Audio[]        @relation("CategoryToAudio")
+  photos      Photo[]        @relation("CategoryToPhoto")
+  videos      Video[]        @relation("CategoryToVideo")
+  files       MaterialFile[] @relation("CategoryToFile")
+  lessons     Lesson[]       @relation("CategoryToLesson")
+  courses     Course[]       @relation("CategoryToCourse")
 
   @@map("categories")
 }
 
 model Course {
-  id              String   @id @default(uuid())
-  name            String
-  description     String?
-  image_url       String?  @map("image_url")
-  content         Json     @default("[]")
-  author_id       String   @map("author_id")
-  super_admin_id  String?  @map("super_admin_id")
-  created_at      DateTime @default(now()) @map("created_at")
-  updated_at      DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  image_url      String?  @map("image_url")
+  content        Json     @default("[]")
+  author_id      String   @map("author_id")
+  super_admin_id String?  @map("super_admin_id")
+  created_at     DateTime @default(now()) @map("created_at")
+  updated_at     DateTime @updatedAt @map("updated_at")
 
-  author          User     @relation("UserToCourse", fields: [author_id], references: [id])
-  super_admin     User?    @relation("SuperAdminToCourse", fields: [super_admin_id], references: [id])
-  categories      Category[] @relation("CategoryToCourse")
+  author      User       @relation("UserToCourse", fields: [author_id], references: [id])
+  super_admin User?      @relation("SuperAdminToCourse", fields: [super_admin_id], references: [id])
+  categories  Category[] @relation("CategoryToCourse")
 
   @@map("courses")
+}
+
+model TrackerBoard {
+  id             String   @id @default(uuid())
+  name           String
+  student_id     String   @map("student_id")
+  super_admin_id String?  @map("super_admin_id")
+  created_at     DateTime @default(now()) @map("created_at")
+  updated_at     DateTime @updatedAt @map("updated_at")
+
+  student     User            @relation("StudentToTrackerBoard", fields: [student_id], references: [id], onDelete: Cascade)
+  super_admin User?           @relation("SuperAdminToTrackerBoard", fields: [super_admin_id], references: [id])
+  columns     TrackerColumn[]
+
+  @@map("tracker_boards")
+}
+
+model TrackerColumn {
+  id         String   @id @default(uuid())
+  title      String
+  color      String?
+  order      Int      @default(0)
+  board_id   String   @map("board_id")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  board TrackerBoard  @relation(fields: [board_id], references: [id], onDelete: Cascade)
+  tasks TrackerTask[]
+
+  @@map("tracker_columns")
+}
+
+model TrackerTask {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  order       Int      @default(0)
+  column_id   String   @map("column_id")
+  created_at  DateTime @default(now()) @map("created_at")
+  updated_at  DateTime @updatedAt @map("updated_at")
+
+  column   TrackerColumn    @relation(fields: [column_id], references: [id], onDelete: Cascade)
+  subtasks TrackerSubtask[]
+
+  @@map("tracker_tasks")
+}
+
+model TrackerSubtask {
+  id         String   @id @default(uuid())
+  title      String
+  completed  Boolean  @default(false)
+  task_id    String   @map("task_id")
+  created_at DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  task TrackerTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  @@map("tracker_subtasks")
+}
+
+model Notification {
+  id            String   @id @default(uuid())
+  user_id       String   @map("user_id")
+  message_id    String   @map("message_id") // Custom ID or generic ID for frontend translations
+  message_title String   @map("message_title")
+  message       String
+  is_read       Boolean  @default(false) @map("is_read")
+  created_at    DateTime @default(now()) @map("created_at")
+  updated_at DateTime @updatedAt @map("updated_at")
+
+  user User @relation("UserToNotification", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("notifications")
 }

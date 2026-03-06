@@ -28,7 +28,7 @@ import { RequestWithUser } from '../../auth/interfaces/request-with-user.interfa
 
 @ApiTags('Materials - Audio')
 @UseGuards(AuthGuard)
-@Controller('materials/audio')
+@Controller('materials/audios')
 export class AudioController {
   constructor(private readonly audioService: AudioService) {}
 
@@ -39,7 +39,7 @@ export class AudioController {
     @Req() req: RequestWithUser,
     @Query() query: AudioQueryDto,
   ) {
-    return this.audioService.get_all(req.user.sub, query);
+    return this.audioService.get_all(req.user.sub, req.user.role, query);
   }
 
   @Post()

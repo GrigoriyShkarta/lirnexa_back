@@ -25,4 +25,10 @@ export class MaterialBaseResponseDto {
 
   @ApiProperty({ type: () => [CategoryResponseDto], required: false })
   categories?: CategoryResponseDto[];
+
+  @ApiProperty({ type: [String], description: 'List of student IDs who have access to this material', required: false })
+  accessible_student_ids?: string[];
+
+  @ApiProperty({ description: 'Whether the specified student has access to this material', required: false })
+  has_access?: boolean;
 }

@@ -77,6 +77,8 @@ export class UserService {
         super_admin_id,
         teacher_id: dto.teacher_id || (creator_role === Role.teacher ? creator_id : null),
         categories: dto.categories ? { connect: dto.categories.map((id) => ({ id })) } : undefined,
+        can_student_create_tracker: dto.can_student_create_tracker ?? false,
+        can_student_edit_tracker: dto.can_student_edit_tracker ?? false,
       },
     });
 
@@ -151,15 +153,53 @@ export class UserService {
         is_white_sidebar_color: true,
         is_show_sidebar_icon: false,
         font_family: 'inter',
+        currency: 'UAH',
+        dashboard_personalization: {
+          student_dashboard_title: null,
+          student_dashboard_description: null,
+          student_dashboard_hero_image: null,
+          student_announcement: null,
+          is_show_student_progress: false,
+          student_social_instagram: null,
+          student_support_telegram: null,
+          dashboard_title: null,
+          dashboard_description: null,
+          dashboard_hero_image: null,
+        },
       };
     }
 
     const { personalization, ...userData } = user;
+    let payment_reminder_date: Date | null = null;
+
+    if (user.role === Role.student) {
+      const reminder_sub = await this.prisma.studentSubscription.findFirst({
+        where: {
+          student_id: user.id,
+          payment_reminder: true,
+        },
+        include: {
+          lessons: {
+            where: { date: { not: null } },
+            orderBy: { date: 'asc' },
+            take: 1,
+          },
+        },
+      });
+
+      if (reminder_sub?.lessons?.[0]) {
+        payment_reminder_date = reminder_sub.lessons[0].date;
+      }
+    }
+
+    const { dashboard_personalization, ...personalization_data } = personalization as any;
 
     return {
       ...userData,
+      payment_reminder_date,
       space: {
-        personalization,
+        personalization: personalization_data,
+        dashboard_personalization,
       },
     };
   }
@@ -301,7 +341,7 @@ export class UserService {
       data: { status: 'inactive' },
     });
 
-    const { page = 1, limit = 10, search, role } = query;
+    const { page = 1, limit = 10, search, role, sortBy = 'payment_date', sortOrder = 'desc' } = query;
     let category_ids = query.category_ids;
 
     // Handle potential string input from query params (e.g. ?category_ids[]=value or ?category_ids=value)
@@ -363,6 +403,112 @@ export class UserService {
       };
     }
 
+    if (query.payment_statuses && query.payment_statuses.length > 0) {
+      where.purchased_subscriptions = {
+        some: {
+          payment_status: { in: query.payment_statuses as any },
+        },
+      };
+    }
+
+    // 1. Get all matching users with their subscription payment dates for sorting
+    const matchingUsers = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        status: true,
+        created_at: true,
+        purchased_subscriptions: {
+          select: {
+            payment_status: true,
+            payment_date: true,
+            partial_payment_date: true,
+            next_payment_date: true,
+          },
+        },
+      },
+    });
+
+    // 2. Calculate the "target" data for sorting for each user
+    const usersWithSortData = matchingUsers.map((user) => {
+      let sortDate: Date | null = null;
+      let primaryStatusWeight = 999; // Default for users without subscriptions
+      
+      const statusWeights: Record<string, number> = {
+        unpaid: 0,
+        partially_paid: 1,
+        paid: 2,
+      };
+
+      user.purchased_subscriptions.forEach((sub) => {
+        // Handle Date Sorting
+        let dateToConsider: Date | null = null;
+        if (sortBy === 'next_payment_date') {
+          dateToConsider = sub.payment_status === 'partially_paid' ? sub.partial_payment_date : sub.next_payment_date;
+        } else {
+          dateToConsider = sub.payment_status === 'partially_paid' ? sub.partial_payment_date : sub.payment_date;
+        }
+
+        if (dateToConsider) {
+          const dateObj = new Date(dateToConsider);
+          if (!sortDate || dateObj > sortDate) {
+            sortDate = dateObj;
+          }
+        }
+
+        // Handle Status Sorting Logic (take the "worst" status as primary for the user)
+        const currentWeight = statusWeights[sub.payment_status] ?? 999;
+        if (currentWeight < primaryStatusWeight) {
+          primaryStatusWeight = currentWeight;
+        }
+      });
+
+      return {
+        id: user.id as string,
+        status: user.status as string,
+        created_at: new Date(user.created_at),
+        sort_date: sortDate,
+        status_weight: primaryStatusWeight,
+      };
+    });
+
+    // 3. Sort users
+    usersWithSortData.sort((a: any, b: any) => {
+      // Always group by system status first (active before inactive)
+      if (a.status !== b.status) {
+        return a.status === 'active' ? -1 : 1;
+      }
+
+      const orderMultiplier = sortOrder === 'asc' ? 1 : -1;
+
+      // Logic for sorting by Payment Status
+      if (sortBy === 'payment_status') {
+        if (a.status_weight !== b.status_weight) {
+          return (a.status_weight - b.status_weight) * orderMultiplier;
+        }
+      }
+
+      // Logic for sorting by Dates
+      if (a.sort_date && b.sort_date) {
+        return (
+          ((a.sort_date as Date).getTime() - (b.sort_date as Date).getTime()) * orderMultiplier
+        );
+      }
+      
+      if (a.sort_date) return -1;
+      if (b.sort_date) return 1;
+
+      // Fallback: sort by created_at
+      return (
+        ((a.created_at as Date).getTime() - (b.created_at as Date).getTime()) * orderMultiplier
+      );
+    });
+
+    const total = usersWithSortData.length;
+    const paginatedUsers = usersWithSortData.slice(skip, skip + limit);
+    const paginatedIds = paginatedUsers.map((u) => u.id);
+
+    // 4. Fetch full data for the current page, preserving the sort order
     const select: any = { ...USER_LIST_SELECT_FIELDS };
     if (query.include_subscriptions) {
       select.purchased_subscriptions = {
@@ -373,22 +519,18 @@ export class UserService {
       };
     }
 
-    const [data, total] = await Promise.all([
-      this.prisma.user.findMany({
-        where,
-        select,
-        skip,
-        take: limit,
-        orderBy: [
-          { status: 'asc' },
-          { created_at: 'desc' },
-        ],
-      }),
-      this.prisma.user.count({ where }),
-    ]);
+    const data = await this.prisma.user.findMany({
+      where: { id: { in: paginatedIds } },
+      select,
+    });
+
+    // Sort the final results to match the paginatedIds order
+    const orderedData = paginatedIds
+      .map((id) => data.find((user: any) => user.id === id))
+      .filter(Boolean);
 
     return {
-      data: data as unknown as UserListItemResponse[],
+      data: orderedData as unknown as UserListItemResponse[],
       meta: {
         current_page: page,
         total_pages: Math.ceil(total / limit),
@@ -511,6 +653,8 @@ export class UserService {
       status: dto.status,
       is_name_locked: dto.is_name_locked,
       is_avatar_locked: dto.is_avatar_locked,
+      can_student_create_tracker: dto.can_student_create_tracker,
+      can_student_edit_tracker: dto.can_student_edit_tracker,
     };
 
     if (dto.deactivation_date) {
@@ -629,6 +773,82 @@ export class UserService {
     });
 
     return { message: 'user_deleted_successfully' };
+  }
+
+  /**
+   * Deletes multiple users at once.
+   * @param requester_id ID of the user performing the deletion.
+   * @param requester_role Role of the requester.
+   * @param ids Array of user IDs to be deleted.
+   */
+  async bulk_delete_users(
+    requester_id: string,
+    requester_role: Role,
+    ids: string[],
+  ): Promise<{ message: string }> {
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+    });
+
+    if (users.length === 0) {
+      throw new BadRequestException('No users found with given IDs');
+    }
+
+    const authorized_ids: string[] = [];
+    const avatars_to_delete: string[] = [];
+    const teachers_to_unassign: string[] = [];
+
+    // Check permissions for each user exactly like in single delete_user
+    for (const user of users) {
+      let has_permission = false;
+
+      if (requester_role === Role.super_admin && user.super_admin_id === requester_id) {
+        if (requester_id !== user.id) {
+          has_permission = true;
+        }
+      } else if (requester_role === Role.admin) {
+        const requester = await this.prisma.user.findUnique({
+          where: { id: requester_id },
+        });
+        if (
+          requester?.super_admin_id === user.super_admin_id &&
+          user.role !== Role.super_admin &&
+          requester_id !== user.id
+        ) {
+          has_permission = true;
+        }
+      } else if (requester_role === Role.teacher && user.teacher_id === requester_id) {
+        has_permission = true;
+      }
+
+      if (has_permission) {
+        authorized_ids.push(user.id);
+        if (user.avatar) avatars_to_delete.push(user.avatar);
+        if (user.role === Role.teacher) teachers_to_unassign.push(user.id);
+      }
+    }
+
+    if (authorized_ids.length === 0) {
+      throw new BadRequestException('You do not have permission to delete any of the selected users');
+    }
+
+    // Unassign students from teachers being deleted
+    if (teachers_to_unassign.length > 0) {
+      await this.prisma.user.updateMany({
+        where: { teacher_id: { in: teachers_to_unassign } },
+        data: { teacher_id: null },
+      });
+    }
+
+    // Delete avatars from storage
+    await Promise.all(avatars_to_delete.map((url) => this.storageService.deleteFile(url)));
+
+    // Final bulk deletion
+    await this.prisma.user.deleteMany({
+      where: { id: { in: authorized_ids } },
+    });
+
+    return { message: `${authorized_ids.length}_users_deleted_successfully` };
   }
 }
 

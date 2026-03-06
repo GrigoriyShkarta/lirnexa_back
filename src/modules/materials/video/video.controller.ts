@@ -27,7 +27,7 @@ import { RequestWithUser } from '../../auth/interfaces/request-with-user.interfa
 
 @ApiTags('Materials - Video')
 @UseGuards(AuthGuard)
-@Controller('materials/video')
+@Controller('materials/videos')
 export class VideoController {
   constructor(private readonly videoService: VideoService) {}
 
@@ -38,7 +38,7 @@ export class VideoController {
     @Req() req: RequestWithUser,
     @Query() query: VideoQueryDto,
   ) {
-    return this.videoService.get_all(req.user.sub, query);
+    return this.videoService.get_all(req.user.sub, req.user.role, query);
   }
 
   @Post()

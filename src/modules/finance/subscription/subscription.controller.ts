@@ -27,7 +27,9 @@ import {
   PaginatedSubscriptionTemplateResponseDto,
   StudentSubscriptionResponseDto,
   SubscriptionLessonResponseDto,
+  PaymentTransactionResponseDto,
 } from './dto/subscription.response';
+import { TransactionQueryDto } from './dto/transaction-query.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
 
 @ApiTags('Subscriptions')
@@ -50,6 +52,22 @@ export class SubscriptionController {
   @ApiOkResponse({ type: PaginatedSubscriptionTemplateResponseDto })
   async findAll(@Req() req: RequestWithUser, @Query() query: SubscriptionQueryDto) {
     return this.subscriptionService.get_all(req.user.sub, query);
+  }
+
+  @Get('transactions')
+  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  @ApiOperation({ summary: 'Get all payment transactions for the space' })
+  @ApiOkResponse({ type: [PaymentTransactionResponseDto] })
+  async getTransactions(@Req() req: RequestWithUser, @Query() query: TransactionQueryDto) {
+    return this.subscriptionService.getAllTransactions(req.user.sub, req.user.role, query);
+  }
+
+  @Get('transactions/subscription/:id')
+  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  @ApiOperation({ summary: 'Get all transactions for a specific student subscription' })
+  @ApiOkResponse({ type: [PaymentTransactionResponseDto] })
+  async getSubscriptionTransactions(@Param('id') id: string) {
+    return this.subscriptionService.getSubscriptionTransactions(id);
   }
 
   @Get(':id')

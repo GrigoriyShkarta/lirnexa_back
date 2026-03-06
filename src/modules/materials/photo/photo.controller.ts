@@ -27,7 +27,7 @@ import { RequestWithUser } from '../../auth/interfaces/request-with-user.interfa
 
 @ApiTags('Materials - Photo')
 @UseGuards(AuthGuard)
-@Controller('materials/photo')
+@Controller('materials/photos')
 export class PhotoController {
   constructor(private readonly photoService: PhotoService) {}
 
@@ -38,7 +38,7 @@ export class PhotoController {
     @Req() req: RequestWithUser,
     @Query() query: PhotoQueryDto,
   ) {
-    return this.photoService.get_all(req.user.sub, query);
+    return this.photoService.get_all(req.user.sub, req.user.role, query);
   }
 
   @Post()

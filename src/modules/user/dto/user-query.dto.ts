@@ -40,8 +40,27 @@ export class UserQueryDto {
   })
   category_ids?: string[];
 
+  @ApiPropertyOptional({ example: ['paid', 'partially_paid'], description: 'Filter by payment statuses' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value;
+    return [];
+  })
+  payment_statuses?: string[];
+
   @ApiPropertyOptional({ example: true, description: 'Include student subscriptions' })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   include_subscriptions?: boolean;
+
+  @ApiPropertyOptional({ example: 'payment_date', description: 'Sort by field (e.g., payment_date, next_payment_date, payment_status, created_at)' })
+  @IsString()
+  @IsOptional()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ example: 'desc', enum: ['asc', 'desc'], description: 'Sort order' })
+  @IsString()
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc' = 'desc';
 }

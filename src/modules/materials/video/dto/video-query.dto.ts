@@ -24,12 +24,23 @@ export class VideoQueryDto {
 
   @ApiPropertyOptional({ example: ['uuid-1', 'uuid-2'], description: 'Filter by category IDs' })
   @IsOptional()
-  @Transform(({ value }) => {
-    if (typeof value === 'string') return [value];
-    if (Array.isArray(value)) return value;
-    return [];
+  @Transform(({ value, obj }) => {
+    const val = value || obj['category_ids[]'];
+    if (typeof val === 'string') return [val];
+    if (Array.isArray(val)) return val;
+    return undefined;
   })
   @IsArray()
   @IsString({ each: true })
   category_ids?: string[];
+
+  @ApiPropertyOptional({ description: 'Filter materials that student has access to' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  from_student?: boolean;
+
+  @ApiPropertyOptional({ description: 'Specific student ID to check access for' })
+  @IsOptional()
+  @IsString()
+  student_id?: string;
 }

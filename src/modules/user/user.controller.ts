@@ -25,6 +25,8 @@ import { RequestWithUser } from '../auth/interfaces/request-with-user.interface'
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UserProfileResponse, UserListItemResponse, PaginatedUserListResponse } from './dto/user-profile.response';
 import { UserQueryDto } from './dto/user-query.dto';
+import { BulkDeleteUsersDto } from './dto/bulk-delete-users.dto';
+
 
 @ApiTags('User Management')
 @UseGuards(AuthGuard)
@@ -36,7 +38,7 @@ export class UserController {
   constructor(private user_service: UserService) {}
 
   @Post()
-  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  // @Roles(Role.super_admin, Role.admin, Role.teacher)
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Create a new user (Super Admin, Admin, Teacher only)' })
@@ -127,5 +129,15 @@ export class UserController {
     @Param('id') id: string,
   ): Promise<{ message: string }> {
     return this.user_service.delete_user(req.user.sub, req.user.role, id);
+  }
+
+  @Post('bulk-delete')
+  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  @ApiOperation({ summary: 'Delete multiple users (Super Admin, Admin, Teacher only)' })
+  async bulk_delete_users(
+    @Req() req: RequestWithUser,
+    @Body() dto: BulkDeleteUsersDto,
+  ): Promise<{ message: string }> {
+    return this.user_service.bulk_delete_users(req.user.sub, req.user.role, dto.ids);
   }
 }

@@ -96,4 +96,14 @@ export class CreateUserDto {
   @IsDateString()
   @IsOptional()
   deactivation_date?: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Can student create trackers' })
+  @IsBoolean()
+  @IsOptional()
+  can_student_create_tracker?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Can student edit trackers' })
+  @IsBoolean()
+  @IsOptional()
+  can_student_edit_tracker?: boolean;
 }

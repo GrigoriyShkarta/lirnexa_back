@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
@@ -7,6 +7,8 @@ import { Role } from '@prisma/client';
 import { CreateStudentSubscriptionDto } from './dto/create-student-subscription.dto';
 import { UpdateStudentSubscriptionDto } from './dto/update-student-subscription.dto';
 import { UpdateLessonStatusDto } from './dto/update-lesson-status.dto';
+
+import { TransactionQueryDto } from './dto/transaction-query.dto';
 
 @Injectable()
 export class SubscriptionService {
@@ -129,22 +131,47 @@ export class SubscriptionService {
   // --- Student Subscription Logic ---
 
   async assignToStudent(dto: CreateStudentSubscriptionDto) {
-    const template = await this.prisma.subscription.findUnique({
-      where: { id: dto.subscription_id },
-    });
+    let name = dto.name;
+    let price = dto.price;
+    let lessonsCount = dto.lessons_count;
 
-    if (!template) {
-      throw new NotFoundException('Subscription template not found');
+    if (dto.subscription_id) {
+      const template = await this.prisma.subscription.findUnique({
+        where: { id: dto.subscription_id },
+      });
+
+      if (!template) {
+        throw new NotFoundException('Subscription template not found');
+      }
+
+      // If not explicitly provided in DTO, use values from template
+      name = name ?? template.name;
+      price = price ?? template.price;
+      lessonsCount = lessonsCount ?? template.lessons_count;
     }
 
-    const lessonsCount = template.lessons_count;
+    if (!name || price === undefined || lessonsCount === undefined) {
+      throw new BadRequestException(
+        'Subscription name, price and lessons count are required for custom subscriptions',
+      );
+    }
+
+    // Fetch student's super_admin_id to associate the subscription correctly
+    const student = await this.prisma.user.findUnique({
+      where: { id: dto.student_id },
+      select: { super_admin_id: true },
+    });
+
+    const studentSuperAdminId = student?.super_admin_id || null;
 
     // Use default payment date if not provided
     const paymentDate = dto.payment_date ? new Date(dto.payment_date) : new Date();
 
     const studentSubscription = await this.prisma.studentSubscription.create({
       data: {
-        price: template.price,
+        name,
+        price,
+        lessons_count: lessonsCount,
         paid_amount: dto.paid_amount ?? 0,
         payment_status: dto.payment_status ?? 'unpaid',
         payment_date: paymentDate,
@@ -152,14 +179,25 @@ export class SubscriptionService {
         next_payment_date: dto.next_payment_date ? new Date(dto.next_payment_date) : null,
         payment_reminder: dto.payment_reminder ?? false,
         selected_days: dto.selected_days ?? [],
+        comment: dto.comment,
         student_id: dto.student_id,
         subscription_id: dto.subscription_id,
+        super_admin_id: studentSuperAdminId,
         lessons: {
           create: Array.from({ length: lessonsCount }).map((_, i) => ({
             date: dto.lesson_dates?.[i] ? new Date(dto.lesson_dates[i]) : null,
             status: 'scheduled',
           })),
         },
+        transactions: (dto.paid_amount && dto.paid_amount > 0) ? {
+          create: {
+            amount: dto.paid_amount,
+            payment_date: paymentDate,
+            super_admin_id: studentSuperAdminId,
+            student_id: dto.student_id,
+            comment: 'Initial payment',
+          }
+        } : undefined,
       },
       include: {
         lessons: true,
@@ -216,7 +254,7 @@ export class SubscriptionService {
   async updateStudentSubscription(id: string, dto: UpdateStudentSubscriptionDto) {
     const current = await this.prisma.studentSubscription.findUnique({
       where: { id },
-      select: { price: true, paid_amount: true },
+      select: { price: true, paid_amount: true, student_id: true, super_admin_id: true },
     });
 
     if (!current) {
@@ -263,10 +301,29 @@ export class SubscriptionService {
     if (dto.next_payment_date) {
       data.next_payment_date = new Date(dto.next_payment_date);
     }
-    return this.prisma.studentSubscription.update({
+
+    const updated = await this.prisma.studentSubscription.update({
       where: { id },
       data,
     });
+
+    // Record transaction for payment increase
+    const newPaidAmount = data.paid_amount ?? current.paid_amount;
+    if (newPaidAmount > current.paid_amount) {
+      const diff = newPaidAmount - current.paid_amount;
+      await this.prisma.paymentTransaction.create({
+        data: {
+          amount: diff,
+          payment_date: dto.payment_date ? new Date(dto.payment_date) : new Date(),
+          student_subscription_id: id,
+          super_admin_id: current.super_admin_id,
+          student_id: current.student_id,
+          comment: dto.comment || 'Additional payment',
+        }
+      });
+    }
+
+    return updated;
   }
 
   async updateLessonStatus(lessonId: string, dto: UpdateLessonStatusDto) {
@@ -334,9 +391,7 @@ export class SubscriptionService {
 
     return this.prisma.studentSubscription.findMany({
       where: {
-        subscription: {
-          super_admin_id,
-        },
+        super_admin_id,
       },
       include: {
         student: {
@@ -357,6 +412,51 @@ export class SubscriptionService {
         },
       },
       orderBy: { created_at: 'desc' },
+    });
+  }
+
+  async getAllTransactions(userId: string, userRole: Role, query: TransactionQueryDto) {
+    let super_admin_id = userId;
+
+    if (userRole !== Role.super_admin) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { super_admin_id: true },
+      });
+      super_admin_id = user?.super_admin_id || userId;
+    }
+
+    const { start_date, end_date } = query;
+    const where: any = { super_admin_id };
+
+    if (start_date || end_date) {
+      where.payment_date = {};
+      if (start_date) where.payment_date.gte = new Date(start_date);
+      if (end_date) {
+        const endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+        where.payment_date.lte = endDate;
+      }
+    }
+
+    return this.prisma.paymentTransaction.findMany({
+      where,
+      include: {
+        student: {
+          select: { id: true, name: true, email: true },
+        },
+        subscription: {
+          select: { id: true, name: true },
+        },
+      },
+      orderBy: { payment_date: 'desc' },
+    });
+  }
+
+  async getSubscriptionTransactions(subscriptionId: string) {
+    return this.prisma.paymentTransaction.findMany({
+      where: { student_subscription_id: subscriptionId },
+      orderBy: { payment_date: 'desc' },
     });
   }
 }

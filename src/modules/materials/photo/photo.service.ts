@@ -61,7 +61,7 @@ export class PhotoService {
   /**
    * Retrieves all photos with pagination and search.
    */
-  async get_all(user_id: string, query: PhotoQueryDto) {
+  async get_all(user_id: string, userRole: Role, query: PhotoQueryDto) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const search = query.search;
@@ -70,10 +70,21 @@ export class PhotoService {
     const skip = (page - 1) * limit;
 
     const super_admin_id = await this.get_super_admin_id(user_id);
+    const targetStudentId = query.student_id || user_id;
+    const isStudent = userRole === Role.student;
 
     const where: Prisma.PhotoWhereInput = {
       super_admin_id: super_admin_id,
     };
+
+    if (isStudent || query.from_student) {
+      where.access = {
+        some: {
+          student_id: targetStudentId,
+          material_type: 'photo',
+        },
+      };
+    }
 
     if (search) {
       where.name = { contains: search, mode: 'insensitive' };
@@ -93,15 +104,24 @@ export class PhotoService {
         skip,
         take: limit,
         orderBy: { created_at: 'desc' },
-        include: { categories: true },
+        include: { 
+          categories: true,
+          access: {
+            select: {
+              student_id: true,
+            },
+          },
+        },
       }),
       this.prisma.photo.count({ where }),
     ]);
 
-    // Backward compatibility: add 'category' field (the first one from categories array)
+    // Backward compatibility: add 'category' field and map access to student IDs
     const dataWithFallback = data.map(item => ({
       ...item,
       category: item.categories?.[0] || null,
+      accessible_student_ids: (item as any).access?.map((a: any) => a.student_id) || [],
+      has_access: query.student_id ? (item as any).access?.some((a: any) => a.student_id === query.student_id) : false,
     }));
 
     return {

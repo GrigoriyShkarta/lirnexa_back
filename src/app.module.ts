@@ -7,6 +7,7 @@ import { UserModule } from './modules/user/user.module';
 import { MaterialsModule } from './modules/materials/materials.module';
 import { CategoryModule } from './modules/category/category.module';
 import { SubscriptionModule } from './modules/finance/subscription/subscription.module';
+import { TrackerModule } from './modules/tracker/tracker.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -20,6 +21,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     MaterialsModule,
     CategoryModule,
     SubscriptionModule,
+    TrackerModule,
   ],
 })
 /**

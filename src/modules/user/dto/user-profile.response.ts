@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { SpaceResponse } from '../../space/dto/space.response';
+import { SpaceResponse, DashboardPersonalizationResponse } from '../../space/dto/space.response';
 import { CategoryResponseDto } from '../../category/dto/category-response.dto';
 
 /**
@@ -9,6 +9,9 @@ import { CategoryResponseDto } from '../../category/dto/category-response.dto';
 export class UserSpaceResponse {
   @ApiPropertyOptional({ type: () => SpaceResponse, description: 'User personalization settings' })
   personalization: SpaceResponse | null;
+
+  @ApiPropertyOptional({ type: () => DashboardPersonalizationResponse, description: 'Dashboard personalization settings' })
+  dashboard_personalization: DashboardPersonalizationResponse | null;
 }
 
 /**
@@ -66,8 +69,43 @@ export class UserBaseResponse {
   @ApiPropertyOptional({ example: '2020-01-01T00:00:00.000Z', description: 'Deactivation date' })
   deactivation_date: Date | null;
 
+  @ApiPropertyOptional({ example: false, description: 'Can student create trackers' })
+  can_student_create_tracker: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Can student edit trackers' })
+  can_student_edit_tracker: boolean;
+
   @ApiPropertyOptional({ type: () => [CategoryResponseDto], description: 'User categories' })
   user_categories?: CategoryResponseDto[] | null;
+
+  @ApiPropertyOptional({ example: '2024-03-04T12:00:00.000Z', description: 'Date of the lesson for payment reminder' })
+  payment_reminder_date?: Date | null;
+
+  @ApiPropertyOptional({ type: () => [NotificationResponse], description: 'User notifications' })
+  notifications?: NotificationResponse[];
+}
+
+/**
+ * Response DTO for notifications.
+ */
+export class NotificationResponse {
+  @ApiProperty({ example: 'uuid-string' })
+  id: string;
+
+  @ApiProperty({ example: 'uuid-string', description: 'Custom message ID (e.g., student_id)' })
+  message_id: string;
+
+  @ApiProperty({ example: 'Task Name', description: 'Title or name related to notification' })
+  message_title: string;
+
+  @ApiProperty({ example: 'task_column_changed', description: 'Notification message constant' })
+  message: string;
+
+  @ApiProperty({ example: false, description: 'Read status' })
+  is_read: boolean;
+
+  @ApiProperty({ example: '2020-01-01T00:00:00.000Z' })
+  created_at: Date;
 }
 
 /**

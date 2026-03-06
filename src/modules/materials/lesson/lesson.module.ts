@@ -4,8 +4,10 @@ import { LessonController } from './lesson.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthModule } from '../../auth/auth.module';
 
+import { AccessModule } from '../access/access.module';
+
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, AccessModule],
   controllers: [LessonController],
   providers: [LessonService],
   exports: [LessonService],

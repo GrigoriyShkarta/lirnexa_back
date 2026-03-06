@@ -39,14 +39,19 @@ export class LessonController {
   @ApiOperation({ summary: 'Get all lessons with pagination and search' })
   @ApiOkResponse({ type: PaginatedLessonResponseDto })
   async findAll(@Req() req: RequestWithUser, @Query() query: LessonQueryDto) {
-    return this.lessonService.get_all(req.user.sub, query);
+    return this.lessonService.get_all(req.user.sub, req.user.role, query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a lesson by ID' })
   @ApiOkResponse({ type: LessonResponseDto })
-  async findOne(@Param('id') id: string) {
-    return this.lessonService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+    @Query('from_student') from_student?: string,
+    @Query('student_id') student_id?: string,
+  ) {
+    return this.lessonService.findOne(id, req.user.sub, req.user.role, from_student === 'true', student_id);
   }
 
   @Patch(':id')

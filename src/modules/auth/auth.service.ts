@@ -90,6 +90,8 @@ export class AuthService {
     const tokens = await this.generate_tokens(user);
     this.set_tokens_to_cookies(res, tokens.access_token, tokens.refresh_token);
 
+    console.log('tokens', tokens);
+
     return {
       token: tokens.access_token,
       refresh_token: tokens.refresh_token,

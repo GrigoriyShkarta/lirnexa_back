@@ -13,6 +13,11 @@ export class CreateLessonDto {
   @IsOptional()
   is_copying_disabled?: boolean;
 
+  @ApiProperty({ example: true, description: 'Whether to automatically grant access to files in this lesson', required: false, default: true })
+  @IsBoolean()
+  @IsOptional()
+  add_files_to_materials?: boolean;
+
   @ApiProperty({ example: 'https://...', description: 'Cover image URL' })
   @IsString()
   @IsOptional()

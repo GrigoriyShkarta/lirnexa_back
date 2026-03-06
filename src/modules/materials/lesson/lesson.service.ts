@@ -6,9 +6,14 @@ import { UpdateLessonDto } from './dto/update-lesson.dto';
 import { LessonQueryDto } from './dto/lesson-query.dto';
 import { Role } from '@prisma/client';
 
+import { AccessService } from '../access/access.service';
+
 @Injectable()
 export class LessonService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessService: AccessService,
+  ) {}
 
   async create(userId: string, userRole: Role, dto: CreateLessonDto) {
     let super_admin_id: string | null = null;
@@ -43,16 +48,27 @@ export class LessonService {
     return lesson;
   }
 
-  async get_all(userId: string, query: LessonQueryDto) {
-    const { search, page = 1, limit = 10, category_ids } = query;
+  async get_all(userId: string, userRole: Role, query: LessonQueryDto) {
+    const { search, page = 1, limit = 10, category_ids, from_student, student_id } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      OR: [
+    const where: any = {};
+    const isStudent = userRole === Role.student;
+    const targetStudentId = student_id || userId;
+
+    if (isStudent || from_student) {
+      where.access = {
+        some: {
+          student_id: targetStudentId,
+          material_type: 'lesson',
+        },
+      };
+    } else {
+      where.OR = [
         { author_id: userId },
         { super_admin_id: userId },
-      ],
-    };
+      ];
+    }
 
     if (search) {
       where.name = {
@@ -85,16 +101,30 @@ export class LessonService {
             },
           },
           categories: true,
+          access: {
+            select: {
+              student_id: true,
+              full_access: true,
+              accessible_blocks: true,
+            },
+          },
         },
       }),
       this.prisma.lesson.count({ where }),
     ]);
 
-    // Backward compatibility: add 'category' field (the first one from categories array)
-    const dataWithFallback = data.map(item => ({
-      ...item,
-      category: item.categories?.[0] || null,
-    }));
+    // Backward compatibility: add 'category' field and map access to student IDs
+    const dataWithFallback = data.map(item => {
+      const studentAccess = student_id ? item.access.find(a => a.student_id === student_id) : null;
+      return {
+        ...item,
+        category: item.categories?.[0] || null,
+        accessible_student_ids: (item as any).access?.map((a: any) => a.student_id) || [],
+        has_access: !!studentAccess,
+        full_access: studentAccess ? (studentAccess as any).full_access : false,
+        accessible_blocks: studentAccess ? (studentAccess as any).accessible_blocks : [],
+      };
+    });
 
     const dataWithCourses = await this.fillLessonsWithCourses(userId, dataWithFallback);
 
@@ -109,7 +139,8 @@ export class LessonService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId: string, userRole: Role, from_student?: boolean, student_id?: string) {
+    const targetStudentId = student_id || userId;
     const lesson = await this.prisma.lesson.findUnique({
       where: { id },
       include: {
@@ -122,6 +153,12 @@ export class LessonService {
           },
         },
         categories: true,
+        access: (from_student || student_id) ? {
+          where: {
+            student_id: targetStudentId,
+            material_type: 'lesson',
+          }
+        } : false,
       },
     });
 
@@ -129,9 +166,38 @@ export class LessonService {
       throw new NotFoundException(`Lesson with ID ${id} not found`);
     }
 
+    // Handle access info
+    let accessibleBlocks: string[] = [];
+    let isFullAccess = false;
+
+    if (from_student || student_id) {
+      const userAccess = (lesson as any).access?.[0];
+      
+      if (from_student && !userAccess) {
+        throw new NotFoundException(`Access to lesson not found for this student`);
+      }
+
+      if (userAccess) {
+        accessibleBlocks = userAccess.accessible_blocks || [];
+        isFullAccess = userAccess.full_access;
+
+        // Only filter content if it's a direct student request
+        if (from_student && !isFullAccess) {
+          const content = lesson.content as any[];
+          if (Array.isArray(content)) {
+            lesson.content = content.filter((block: any) => 
+              accessibleBlocks.includes(block.id)
+            );
+          }
+        }
+      }
+    }
+
     const withFallback = {
       ...lesson,
       category: lesson.categories?.[0] || null,
+      accessible_blocks: accessibleBlocks,
+      full_access: isFullAccess,
     };
 
     const [withCourses] = await this.fillLessonsWithCourses(
@@ -159,6 +225,10 @@ export class LessonService {
       data,
     });
 
+    if (content) {
+      await this.accessService.sync_lesson_materials_access(lesson.id);
+    }
+
     if (course_ids && course_ids.length > 0) {
       await this.addLessonToCourses(lesson.id, course_ids);
     }
@@ -167,17 +237,66 @@ export class LessonService {
   }
 
   async remove(id: string) {
+    await this.cleanupLessonsInCourses([id]);
     return this.prisma.lesson.delete({
       where: { id },
     });
   }
 
   async remove_bulk(ids: string[]) {
+    await this.cleanupLessonsInCourses(ids);
     return this.prisma.lesson.deleteMany({
       where: {
         id: { in: ids },
       },
     });
+  }
+
+  private async cleanupLessonsInCourses(lessonIds: string[]) {
+    if (!lessonIds.length) return;
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: { id: { in: lessonIds } },
+      select: { super_admin_id: true }
+    });
+
+    const superAdminIds = [...new Set(lessons.map(l => l.super_admin_id).filter(Boolean))];
+
+    if (!superAdminIds.length) return;
+
+    const courses = await this.prisma.course.findMany({
+      where: { super_admin_id: { in: superAdminIds as string[] } },
+      select: { id: true, content: true }
+    });
+
+    for (const course of courses) {
+      const content = Array.isArray(course.content) ? (course.content as any[]) : [];
+      let modified = false;
+
+      const newContent = content.map(item => {
+        if (item.type === 'lesson') {
+          if (lessonIds.includes(item.lesson_id)) {
+            modified = true;
+            return null;
+          }
+        } else if (item.type === 'group' && Array.isArray(item.lesson_ids)) {
+          const originalLength = item.lesson_ids.length;
+          const filteredIds = item.lesson_ids.filter(id => !lessonIds.includes(id));
+          if (filteredIds.length !== originalLength) {
+            modified = true;
+            item.lesson_ids = filteredIds;
+          }
+        }
+        return item;
+      }).filter(Boolean);
+
+      if (modified) {
+        await this.prisma.course.update({
+          where: { id: course.id },
+          data: { content: newContent }
+        });
+      }
+    }
   }
 
   private async addLessonToCourses(lessonId: string, courseIds: string[]) {

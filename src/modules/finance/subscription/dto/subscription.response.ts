@@ -91,7 +91,13 @@ export class StudentSubscriptionResponseDto {
   id: string;
 
   @ApiProperty()
+  name: string;
+
+  @ApiProperty()
   price: number;
+
+  @ApiProperty()
+  lessons_count: number;
 
   @ApiProperty()
   paid_amount: number;
@@ -117,8 +123,8 @@ export class StudentSubscriptionResponseDto {
   @ApiProperty()
   student_id: string;
 
-  @ApiProperty()
-  subscription_id: string;
+  @ApiPropertyOptional()
+  subscription_id: string | null;
 
   @ApiProperty()
   created_at: Date;
@@ -129,9 +135,44 @@ export class StudentSubscriptionResponseDto {
   @ApiPropertyOptional({ type: [SubscriptionLessonResponseDto] })
   lessons?: SubscriptionLessonResponseDto[];
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: 'object',
     properties: { id: { type: 'string' }, name: { type: 'string' }, lessons_count: { type: 'number' } },
   })
-  subscription: { id: string; name: string; lessons_count: number };
+  subscription?: { id: string; name: string; lessons_count: number } | null;
+}
+
+export class PaymentTransactionResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  amount: number;
+
+  @ApiProperty()
+  payment_date: Date;
+
+  @ApiProperty()
+  student_subscription_id: string;
+
+  @ApiPropertyOptional()
+  super_admin_id: string | null;
+
+  @ApiPropertyOptional()
+  student_id: string | null;
+
+  @ApiPropertyOptional()
+  comment: string | null;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    properties: { id: { type: 'string' }, name: { type: 'string' }, email: { type: 'string' } },
+  })
+  student?: { id: string; name: string; email: string };
+
+  @ApiPropertyOptional({
+    type: 'object',
+    properties: { id: { type: 'string' }, name: { type: 'string' } },
+  })
+  subscription?: { id: string; name: string };
 }

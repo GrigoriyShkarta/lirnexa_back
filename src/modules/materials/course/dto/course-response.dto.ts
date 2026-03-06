@@ -48,6 +48,12 @@ export class CourseResponseDto {
 
   @ApiProperty()
   updated_at: Date;
+
+  @ApiProperty({ description: 'Whether the current student has access to the course' })
+  has_access: boolean;
+
+  @ApiProperty({ description: 'Course passage progress in percentage' })
+  progress_percentage: number;
 }
 
 export class PaginatedCourseResponseDto {

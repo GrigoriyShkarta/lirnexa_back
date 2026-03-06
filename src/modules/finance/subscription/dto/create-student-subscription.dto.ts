@@ -3,10 +3,25 @@ import { IsNotEmpty, IsNumber, IsOptional, IsString, IsEnum, IsArray, IsDateStri
 import { PaymentStatus } from '@prisma/client';
 
 export class CreateStudentSubscriptionDto {
-  @ApiProperty({ example: 'uuid-template', description: 'Template Subscription ID' })
+  @ApiPropertyOptional({ example: 'uuid-template', description: 'Template Subscription ID (optional for custom subscriptions)' })
   @IsString()
-  @IsNotEmpty()
-  subscription_id: string;
+  @IsOptional()
+  subscription_id?: string;
+
+  @ApiPropertyOptional({ example: 'Custom Subscription', description: 'Name of the subscription (optional if using template)' })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional({ example: 4, description: 'Number of lessons (optional if using template)' })
+  @IsNumber()
+  @IsOptional()
+  lessons_count?: number;
+
+  @ApiPropertyOptional({ example: 1000, description: 'Price (optional if using template)' })
+  @IsNumber()
+  @IsOptional()
+  price?: number;
 
   @ApiProperty({ example: 'uuid-student', description: 'Student ID' })
   @IsString()
@@ -53,4 +68,9 @@ export class CreateStudentSubscriptionDto {
   @IsString({ each: true })
   @IsOptional()
   selected_days?: string[];
+
+  @ApiPropertyOptional({ example: 'Some comment', description: 'Additional comment' })
+  @IsString()
+  @IsOptional()
+  comment?: string;
 }

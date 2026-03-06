@@ -37,6 +37,7 @@ export class SpaceService {
 
     const space = await this.prisma.personalization.findUnique({
       where: { user_id: target_super_admin_id },
+      include: { dashboard_personalization: true },
     });
 
     if (!space) {
@@ -50,6 +51,7 @@ export class SpaceService {
         primary_color: '#2563eb',
         secondary_color: '#64748b',
         bg_color_dark: '#0f0f0f',
+        currency: 'UAH',
       };
     }
 
@@ -61,34 +63,82 @@ export class SpaceService {
    * @param user_id Current user ID (must be super_admin).
    * @param dto Space settings data.
    * @param icon_file Optional uploaded icon file.
+   * @param student_hero_file Optional student dashboard hero image.
+   * @param admin_hero_file Optional admin dashboard hero image.
    */
   async save_space(
     user_id: string,
     dto: SafeSpaceDto,
     icon_file?: Express.Multer.File,
+    student_hero_file?: Express.Multer.File,
+    admin_hero_file?: Express.Multer.File,
   ): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: user_id },
-      select: { name: true, id: true, personalization: { select: { icon: true } } },
+      select: {
+        name: true,
+        id: true,
+        personalization: {
+          select: {
+            icon: true,
+            dashboard_personalization: {
+              select: {
+                student_dashboard_hero_image: true,
+                dashboard_hero_image: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
       throw new NotFoundException('user_not_found');
     }
 
-    let icon_url: string | undefined;
+    const sanitized_name = user.name.replace(/\s+/g, '_');
+    const folder_path = `${sanitized_name}${user.id}/space`;
 
+    let icon_url: string | undefined;
     if (icon_file) {
-      // If there is an old icon, delete it
-      if (user.personalization?.icon && user.personalization.icon !== '') {
+      if (user.personalization?.icon) {
         await this.storageService.deleteFile(user.personalization.icon);
       }
-
-      // Folder: name+uuid/space (sanitized name)
-      const sanitized_name = user.name.replace(/\s+/g, '_');
-      const folder_path = `${sanitized_name}${user.id}/space`;
       icon_url = await this.storageService.uploadFile(icon_file, folder_path);
     }
+
+    let student_hero_url: string | undefined;
+    if (student_hero_file) {
+      if (user.personalization?.dashboard_personalization?.student_dashboard_hero_image) {
+        await this.storageService.deleteFile(
+          user.personalization.dashboard_personalization.student_dashboard_hero_image,
+        );
+      }
+      student_hero_url = await this.storageService.uploadFile(student_hero_file, folder_path);
+    }
+
+    let admin_hero_url: string | undefined;
+    if (admin_hero_file) {
+      if (user.personalization?.dashboard_personalization?.dashboard_hero_image) {
+        await this.storageService.deleteFile(
+          user.personalization.dashboard_personalization.dashboard_hero_image,
+        );
+      }
+      admin_hero_url = await this.storageService.uploadFile(admin_hero_file, folder_path);
+    }
+
+    const dashboard_data = {
+      student_dashboard_title: dto.student_dashboard_title,
+      student_dashboard_description: dto.student_dashboard_description,
+      student_announcement: dto.student_announcement,
+      is_show_student_progress: dto.is_show_student_progress,
+      student_social_instagram: dto.student_social_instagram,
+      student_support_telegram: dto.student_support_telegram,
+      dashboard_title: dto.dashboard_title,
+      dashboard_description: dto.dashboard_description,
+      ...(student_hero_url && { student_dashboard_hero_image: student_hero_url }),
+      ...(admin_hero_url && { dashboard_hero_image: admin_hero_url }),
+    };
 
     await this.prisma.personalization.upsert({
       where: { user_id },
@@ -102,7 +152,15 @@ export class SpaceService {
         bg_color_dark: dto.bg_color_dark,
         font_family: dto.font_family,
         is_show_sidebar_icon: dto.is_show_sidebar_icon,
+        is_white_sidebar_color: dto.is_white_sidebar_color,
+        currency: dto.currency,
         ...(icon_url && { icon: icon_url }),
+        dashboard_personalization: {
+          upsert: {
+            create: dashboard_data,
+            update: dashboard_data,
+          },
+        },
       },
       create: {
         user_id,
@@ -115,7 +173,12 @@ export class SpaceService {
         bg_color_dark: dto.bg_color_dark,
         font_family: dto.font_family,
         is_show_sidebar_icon: dto.is_show_sidebar_icon,
+        is_white_sidebar_color: dto.is_white_sidebar_color,
+        currency: dto.currency,
         ...(icon_url && { icon: icon_url }),
+        dashboard_personalization: {
+          create: dashboard_data,
+        },
       },
     });
 

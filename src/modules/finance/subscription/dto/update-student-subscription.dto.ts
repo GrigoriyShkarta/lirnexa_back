@@ -3,6 +3,21 @@ import { IsNumber, IsOptional, IsEnum, IsDateString, IsArray, IsString } from 'c
 import { PaymentStatus } from '@prisma/client';
 
 export class UpdateStudentSubscriptionDto {
+  @ApiPropertyOptional({ example: 'Updated Name' })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional({ example: 1000 })
+  @IsNumber()
+  @IsOptional()
+  price?: number;
+
+  @ApiPropertyOptional({ example: 4 })
+  @IsNumber()
+  @IsOptional()
+  lessons_count?: number;
+
   @ApiPropertyOptional({ example: 50, description: 'Amount already paid' })
   @IsNumber()
   @IsOptional()
@@ -37,4 +52,9 @@ export class UpdateStudentSubscriptionDto {
   @IsString({ each: true })
   @IsOptional()
   selected_days?: string[];
+
+  @ApiPropertyOptional({ example: 'Some comment', description: 'Additional comment' })
+  @IsString()
+  @IsOptional()
+  comment?: string;
 }

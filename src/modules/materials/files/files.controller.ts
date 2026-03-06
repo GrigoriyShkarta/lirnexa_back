@@ -39,7 +39,7 @@ export class FilesController {
     @Req() req: RequestWithUser,
     @Query() query: FileQueryDto,
   ) {
-    return this.filesService.get_all(req.user.sub, query);
+    return this.filesService.get_all(req.user.sub, req.user.role, query);
   }
 
   @Post()

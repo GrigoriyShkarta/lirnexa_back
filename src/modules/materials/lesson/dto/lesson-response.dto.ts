@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional } from 'class-validator';
 import { CategoryResponseDto } from '../../../category/dto/category-response.dto';
 
 export class LessonAuthorResponseDto {
@@ -35,6 +36,9 @@ export class LessonResponseDto {
   @ApiProperty({ default: false })
   is_copying_disabled: boolean;
 
+  @ApiProperty({ default: true })
+  add_files_to_materials: boolean;
+
   @ApiProperty()
   content: any;
 
@@ -58,6 +62,21 @@ export class LessonResponseDto {
 
   @ApiProperty()
   updated_at: Date;
+
+  @ApiProperty({ type: [String], description: 'List of block IDs accessible to the specified student', required: false })
+  accessible_blocks?: string[];
+
+  @IsOptional()
+  @ApiProperty({ description: 'Whether the specified student has full access to the lesson', required: false })
+  full_access?: boolean;
+
+  @ApiProperty({ type: [String], description: 'List of student IDs who have access to this lesson', required: false })
+  @IsOptional()
+  accessible_student_ids?: string[];
+
+  @ApiProperty({ description: 'Whether the specified student has access to the lesson', required: false })
+  @IsOptional()
+  has_access?: boolean;
 }
 
 export class PaginatedLessonResponseDto {
