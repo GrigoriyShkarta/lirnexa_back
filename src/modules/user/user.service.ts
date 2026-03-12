@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -10,6 +10,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UserQueryDto } from './dto/user-query.dto';
+import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 
 @Injectable()
 /**
@@ -19,6 +20,8 @@ export class UserService {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    @Inject(forwardRef(() => GoogleCalendarService))
+    private googleCalendarService: GoogleCalendarService,
   ) {}
 
   /**
@@ -767,6 +770,9 @@ export class UserService {
       await this.storageService.deleteFile(user.avatar);
     }
 
+    // Google Calendar cleanup: remove synced events and tokens
+    await this.googleCalendarService.disconnect(target_user_id);
+
     // Final deletion
     await this.prisma.user.delete({
       where: { id: target_user_id },
@@ -842,6 +848,9 @@ export class UserService {
 
     // Delete avatars from storage
     await Promise.all(avatars_to_delete.map((url) => this.storageService.deleteFile(url)));
+
+    // Cleanup Google Calendar for all deleted users
+    await Promise.all(authorized_ids.map((id) => this.googleCalendarService.disconnect(id)));
 
     // Final bulk deletion
     await this.prisma.user.deleteMany({

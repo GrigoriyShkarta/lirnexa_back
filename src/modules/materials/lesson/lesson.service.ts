@@ -329,6 +329,7 @@ export class LessonService {
     }
   }
 
+
   private async fillLessonsWithCourses(userId: string, lessons: any[]) {
     if (lessons.length === 0) return lessons;
 

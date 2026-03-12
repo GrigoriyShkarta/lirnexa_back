@@ -205,7 +205,9 @@ export class TrackerService {
             user_id: student_id,
             message_id: student_id, // requested logic: message_id is the student ID
             message_title: task.title,
+            message_type: 'task',
             message: 'new_task_created',
+            payload: { task_id: task.id },
           },
         });
       }
@@ -301,7 +303,15 @@ export class TrackerService {
               user_id: admin_id,
               message_id: task.column.board.student_id, // requested logic: message_id is the student ID
               message_title: task.column.board.student.name,
+              message_type: 'user',
               message: 'task_column_changed',
+              payload: { 
+                task_id: updated_task.id, 
+                task_title: updated_task.title,
+                task_name: updated_task.title,
+                student_id: task.column.board.student_id,
+                column_id: new_column_id
+              },
             },
           });
         }

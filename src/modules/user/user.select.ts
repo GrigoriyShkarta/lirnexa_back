@@ -73,8 +73,10 @@ export const USER_SELECT_FIELDS = {
     select: {
       id: true,
       message_id: true,
+      message_type: true,
       message_title: true,
       message: true,
+      payload: true,
       is_read: true,
       created_at: true,
     },

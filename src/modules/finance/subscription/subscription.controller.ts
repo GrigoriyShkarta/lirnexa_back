@@ -30,6 +30,7 @@ import {
   PaymentTransactionResponseDto,
 } from './dto/subscription.response';
 import { TransactionQueryDto } from './dto/transaction-query.dto';
+import { CalendarQueryDto } from './dto/calendar-query.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
 
 @ApiTags('Subscriptions')
@@ -60,6 +61,13 @@ export class SubscriptionController {
   @ApiOkResponse({ type: [PaymentTransactionResponseDto] })
   async getTransactions(@Req() req: RequestWithUser, @Query() query: TransactionQueryDto) {
     return this.subscriptionService.getAllTransactions(req.user.sub, req.user.role, query);
+  }
+
+  @Get('calendar')
+  @ApiOperation({ summary: 'Get subscription lessons for calendar view' })
+  @ApiOkResponse({ type: [SubscriptionLessonResponseDto] })
+  async getCalendar(@Req() req: RequestWithUser, @Query() query: CalendarQueryDto) {
+    return this.subscriptionService.getCalendar(req.user.sub, req.user.role, query);
   }
 
   @Get('transactions/subscription/:id')

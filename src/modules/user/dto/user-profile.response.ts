@@ -98,8 +98,14 @@ export class NotificationResponse {
   @ApiProperty({ example: 'Task Name', description: 'Title or name related to notification' })
   message_title: string;
 
+  @ApiPropertyOptional({ example: 'task', description: 'Notification type (e.g., task or user)' })
+  message_type: string | null;
+
   @ApiProperty({ example: 'task_column_changed', description: 'Notification message constant' })
   message: string;
+
+  @ApiPropertyOptional({ example: { task_id: 'uuid' }, description: 'Notification metadata' })
+  payload: any;
 
   @ApiProperty({ example: false, description: 'Read status' })
   is_read: boolean;

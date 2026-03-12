@@ -8,7 +8,9 @@ import { MaterialsModule } from './modules/materials/materials.module';
 import { CategoryModule } from './modules/category/category.module';
 import { SubscriptionModule } from './modules/finance/subscription/subscription.module';
 import { TrackerModule } from './modules/tracker/tracker.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { GoogleCalendarModule } from './modules/integrations/google-calendar/google-calendar.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     CategoryModule,
     SubscriptionModule,
     TrackerModule,
+    NotificationModule,
+    GoogleCalendarModule,
   ],
 })
 /**

@@ -51,12 +51,16 @@ model User {
   transactions                  PaymentTransaction[]  @relation("StudentToTransaction")
   managed_transactions          PaymentTransaction[]  @relation("SuperAdminToTransaction")
 
-  can_student_create_tracker    Boolean               @default(false) @map("can_student_create_tracker")
-  can_student_edit_tracker      Boolean               @default(false) @map("can_student_edit_tracker")
+  can_student_create_tracker Boolean @default(false) @map("can_student_create_tracker")
+  can_student_edit_tracker   Boolean @default(false) @map("can_student_edit_tracker")
 
-  tracker_boards                TrackerBoard[]        @relation("StudentToTrackerBoard")
-  managed_tracker_boards        TrackerBoard[]        @relation("SuperAdminToTrackerBoard")
-  notifications                 Notification[]        @relation("UserToNotification")
+  tracker_boards         TrackerBoard[] @relation("StudentToTrackerBoard")
+  managed_tracker_boards TrackerBoard[] @relation("SuperAdminToTrackerBoard")
+  notifications          Notification[] @relation("UserToNotification")
+  personal_events        PersonalEvent[]
+
+  google_access_token  String? @map("google_access_token")
+  google_refresh_token String? @map("google_refresh_token")
 
   @@map("users")
 }
@@ -97,7 +101,7 @@ model StudentSubscription {
   created_at           DateTime      @default(now()) @map("created_at")
   updated_at           DateTime      @updatedAt @map("updated_at")
 
-  student      User                 @relation("StudentToSubscription", fields: [student_id], references: [id])
+  student      User                 @relation("StudentToSubscription", fields: [student_id], references: [id], onDelete: Cascade)
   subscription Subscription?        @relation(fields: [subscription_id], references: [id])
   super_admin  User?                @relation("SuperAdminToStudentSubscription", fields: [super_admin_id], references: [id])
   lessons      SubscriptionLesson[]
@@ -118,7 +122,7 @@ model PaymentTransaction {
   updated_at              DateTime @updatedAt @map("updated_at")
 
   subscription StudentSubscription @relation(fields: [student_subscription_id], references: [id], onDelete: Cascade)
-  student      User?               @relation("StudentToTransaction", fields: [student_id], references: [id])
+  student      User?               @relation("StudentToTransaction", fields: [student_id], references: [id], onDelete: SetNull)
   super_admin  User?               @relation("SuperAdminToTransaction", fields: [super_admin_id], references: [id])
 
   @@map("payment_transactions")
@@ -129,6 +133,7 @@ model SubscriptionLesson {
   student_subscription_id String                   @map("student_subscription_id")
   date                    DateTime?
   status                  SubscriptionLessonStatus @default(scheduled)
+  google_event_id         String?                  @map("google_event_id")
   created_at              DateTime                 @default(now()) @map("created_at")
   updated_at              DateTime                 @updatedAt @map("updated_at")
 
@@ -156,41 +161,41 @@ enum UserStatus {
 }
 
 model Personalization {
-  id                     String   @id @default(uuid())
-  title_space            String   @default("Lirnexa") @map("title_space")
-  icon                   String   @default("")
-  languages              String[] @default(["uk"])
-  select_mode            Boolean  @default(false) @map("select_mode")
-  bg_color               String   @default("#ffffff") @map("bg_color")
-  primary_color          String   @default("#2563eb") @map("primary_color")
-  secondary_color        String   @default("#64748b") @map("secondary_color")
-  bg_color_dark          String   @default("#0f0f0f") @map("bg_color_dark")
-  user_id                String   @unique @map("user_id")
-  created_at             DateTime @default(now()) @map("created_at")
-  updated_at             DateTime @updatedAt @map("updated_at")
-  is_white_sidebar_color Boolean  @default(true) @map("is_white_sidebar_color")
-  is_show_sidebar_icon   Boolean  @default(false) @map("is_show_sidebar_icon")
-  font_family            String   @default("inter") @map("font_family")
-  currency               String   @default("UAH") @map("currency")
-  user                   User     @relation(fields: [user_id], references: [id])
+  id                        String                    @id @default(uuid())
+  title_space               String                    @default("Lirnexa") @map("title_space")
+  icon                      String                    @default("")
+  languages                 String[]                  @default(["uk"])
+  select_mode               Boolean                   @default(false) @map("select_mode")
+  bg_color                  String                    @default("#ffffff") @map("bg_color")
+  primary_color             String                    @default("#2563eb") @map("primary_color")
+  secondary_color           String                    @default("#64748b") @map("secondary_color")
+  bg_color_dark             String                    @default("#0f0f0f") @map("bg_color_dark")
+  user_id                   String                    @unique @map("user_id")
+  created_at                DateTime                  @default(now()) @map("created_at")
+  updated_at                DateTime                  @updatedAt @map("updated_at")
+  is_white_sidebar_color    Boolean                   @default(true) @map("is_white_sidebar_color")
+  is_show_sidebar_icon      Boolean                   @default(false) @map("is_show_sidebar_icon")
+  font_family               String                    @default("inter") @map("font_family")
+  currency                  String                    @default("UAH") @map("currency")
+  user                      User                      @relation(fields: [user_id], references: [id], onDelete: Cascade)
   dashboard_personalization DashboardPersonalization?
 
   @@map("spaces")
 }
 
 model DashboardPersonalization {
-  id                            String   @id @default(uuid())
-  student_dashboard_title       String?  @map("student_dashboard_title")
-  student_dashboard_description String?  @map("student_dashboard_description")
-  student_dashboard_hero_image  String?  @map("student_dashboard_hero_image")
-  student_announcement          String?  @map("student_announcement")
-  is_show_student_progress      Boolean  @default(false) @map("is_show_student_progress")
-  student_social_instagram      String?  @map("student_social_instagram")
-  student_support_telegram      String?  @map("student_support_telegram")
-  dashboard_title               String?  @map("dashboard_title")
-  dashboard_description         String?  @map("dashboard_description")
-  dashboard_hero_image          String?  @map("dashboard_hero_image")
-  personalization_id            String   @unique @map("personalization_id")
+  id                            String          @id @default(uuid())
+  student_dashboard_title       String?         @map("student_dashboard_title")
+  student_dashboard_description String?         @map("student_dashboard_description")
+  student_dashboard_hero_image  String?         @map("student_dashboard_hero_image")
+  student_announcement          String?         @map("student_announcement")
+  is_show_student_progress      Boolean         @default(false) @map("is_show_student_progress")
+  student_social_instagram      String?         @map("student_social_instagram")
+  student_support_telegram      String?         @map("student_support_telegram")
+  dashboard_title               String?         @map("dashboard_title")
+  dashboard_description         String?         @map("dashboard_description")
+  dashboard_hero_image          String?         @map("dashboard_hero_image")
+  personalization_id            String          @unique @map("personalization_id")
   personalization               Personalization @relation(fields: [personalization_id], references: [id], onDelete: Cascade)
 
   @@map("dashboard_personalizations")
@@ -309,17 +314,17 @@ model MaterialAccess {
 }
 
 model Lesson {
-  id                  String   @id @default(uuid())
-  name                String
-  cover_url           String?  @map("cover_url")
-  cover_position      Int      @default(0) @map("cover_position")
-  content             Json     @default("[]")
-  duration            Int?     @map("duration")
-  author_id           String   @map("author_id")
-  super_admin_id      String?  @map("super_admin_id")
-  created_at          DateTime @default(now()) @map("created_at")
-  updated_at          DateTime @updatedAt @map("updated_at")
-  is_copying_disabled   Boolean  @default(false) @map("is_copying_disabled")
+  id                     String   @id @default(uuid())
+  name                   String
+  cover_url              String?  @map("cover_url")
+  cover_position         Int      @default(0) @map("cover_position")
+  content                Json     @default("[]")
+  duration               Int?     @map("duration")
+  author_id              String   @map("author_id")
+  super_admin_id         String?  @map("super_admin_id")
+  created_at             DateTime @default(now()) @map("created_at")
+  updated_at             DateTime @updatedAt @map("updated_at")
+  is_copying_disabled    Boolean  @default(false) @map("is_copying_disabled")
   add_files_to_materials Boolean  @default(true) @map("add_files_to_materials")
 
   author      User             @relation("UserToLesson", fields: [author_id], references: [id])
@@ -431,13 +436,31 @@ model Notification {
   user_id       String   @map("user_id")
   message_id    String   @map("message_id") // Custom ID or generic ID for frontend translations
   message_title String   @map("message_title")
+  message_type  String?  @map("message_type")
   message       String
+  payload       Json?    @default("{}") @map("payload")
   is_read       Boolean  @default(false) @map("is_read")
   created_at    DateTime @default(now()) @map("created_at")
-  updated_at DateTime @updatedAt @map("updated_at")
+  updated_at    DateTime @updatedAt @map("updated_at")
 
   user User @relation("UserToNotification", fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@map("notifications")
+}
+
+model PersonalEvent {
+  id              String   @id @default(uuid())
+  summary         String
+  description     String?
+  start_time      DateTime @map("start_time")
+  end_time        DateTime @map("end_time")
+  attendees       Json?    @default("[]")
+  google_event_id String?  @map("google_event_id")
+  user_id         String   @map("user_id")
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  created_at      DateTime @default(now()) @map("created_at")
+  updated_at      DateTime @updatedAt @map("updated_at")
+
+  @@map("personal_events")
 }

@@ -9,10 +9,15 @@ import { UpdateStudentSubscriptionDto } from './dto/update-student-subscription.
 import { UpdateLessonStatusDto } from './dto/update-lesson-status.dto';
 
 import { TransactionQueryDto } from './dto/transaction-query.dto';
+import { CalendarQueryDto } from './dto/calendar-query.dto';
+import { GoogleCalendarService } from '../../integrations/google-calendar/google-calendar.service';
 
 @Injectable()
 export class SubscriptionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly googleCalendarService: GoogleCalendarService,
+  ) {}
 
   async create(userId: string, userRole: Role, dto: CreateSubscriptionDto) {
     let super_admin_id: string | null = null;
@@ -205,6 +210,13 @@ export class SubscriptionService {
       },
     });
 
+    // Sync initial lessons to Google Calendar
+    for (const lesson of studentSubscription.lessons) {
+      if (lesson.date) {
+        await this.syncLessonToGoogleCalendar(lesson.id, [dto.student_id, studentSuperAdminId]);
+      }
+    }
+
     return studentSubscription;
   }
 
@@ -358,10 +370,23 @@ export class SubscriptionService {
       }
     }
 
-    return this.prisma.subscriptionLesson.update({
+    const updated = await this.prisma.subscriptionLesson.update({
       where: { id: lessonId },
       data,
+      include: {
+        subscription: {
+          select: { student_id: true, super_admin_id: true },
+        },
+      },
     });
+
+    // Sync to Google Calendar
+    await this.syncLessonToGoogleCalendar(
+      lessonId,
+      [updated.subscription.student_id, updated.subscription.super_admin_id]
+    );
+
+    return updated;
   }
 
   async removeStudentSubscription(id: string) {
@@ -458,5 +483,175 @@ export class SubscriptionService {
       where: { student_subscription_id: subscriptionId },
       orderBy: { payment_date: 'desc' },
     });
+  }
+
+  async getCalendar(userId: string, userRole: Role, query: CalendarQueryDto) {
+    const { start_date, end_date, student_id } = query;
+    const where: any = {};
+
+    if (userRole === Role.student) {
+      // Student sees only their own lessons
+      where.subscription = { student_id: userId };
+    } else {
+      // Admin/Teacher see lessons of their students
+      let super_admin_id = userId;
+      if (userRole !== Role.super_admin) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { super_admin_id: true },
+        });
+        super_admin_id = user?.super_admin_id || userId;
+      }
+
+      where.subscription = { super_admin_id };
+
+      // Optional filter by student
+      if (student_id) {
+        where.subscription.student_id = student_id;
+      }
+    }
+
+    // Date range filter for lessons
+    if (start_date || end_date) {
+      where.date = {};
+      if (start_date) where.date.gte = new Date(start_date);
+      if (end_date) {
+        const endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+        where.date.lte = endDate;
+      }
+    } else {
+      where.date = { not: null };
+    }
+
+    const lessons = await this.prisma.subscriptionLesson.findMany({
+      where,
+      include: {
+        subscription: {
+          select: {
+            id: true,
+            name: true,
+            student: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    // Fetch personal events for the requester
+    const personalWhere: any = { user_id: userId };
+    if (start_date || end_date) {
+      personalWhere.start_time = {};
+      if (start_date) personalWhere.start_time.gte = new Date(start_date);
+      if (end_date) {
+        const endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999);
+        personalWhere.start_time.lte = endDate;
+      }
+    }
+
+    const personalEvents = await this.prisma.personalEvent.findMany({
+      where: personalWhere,
+      orderBy: { start_time: 'asc' },
+    });
+
+    // Map both to a unified format
+    const formattedLessons = lessons.map(l => ({
+      ...l,
+      source: 'lesson'
+    }));
+
+    const formattedPersonal = personalEvents.map(e => ({
+      id: e.id,
+      date: e.start_time,
+      end_time: e.end_time,
+      status: 'personal',
+      source: 'personal',
+      subscription: {
+        name: e.summary,
+        description: e.description,
+        personal_data: e,
+      }
+    }));
+
+    return [...formattedLessons, ...formattedPersonal].sort((a, b) => 
+      (a.date?.getTime() || 0) - (b.date?.getTime() || 0)
+    );
+  }
+
+  // --- Helper to sync Google Calendar ---
+  private async syncLessonToGoogleCalendar(lessonId: string, userIds: (string | null)[]) {
+    const lesson = await this.prisma.subscriptionLesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        subscription: {
+          include: { student: true, subscription: true },
+        },
+      },
+    });
+
+    if (!lesson) return;
+
+    const summary = `${lesson.subscription.subscription?.name || lesson.subscription.name || 'Lesson'} - ${lesson.subscription.student.name}`;
+
+    for (const userId of userIds) {
+      if (!userId) continue;
+
+      const isConnected = await this.googleCalendarService.isConnected(userId);
+      if (!isConnected) continue;
+
+      // Unschedule / cancel
+      if (lesson.status === 'rescheduled' || lesson.status === 'burned' || !lesson.date) {
+        if (lesson.google_event_id) {
+          await this.googleCalendarService.deleteEvent(userId, lesson.google_event_id);
+          // Only clear ID from DB if it was successfully deleted or we assume it's gone
+          // To prevent constant DB updates across loop passes for different users, 
+          // we are just syncing one-way per user. 
+          // Note: If multiple users track the same event, sharing the same google_event_id in DB 
+          // might be flawed if they have separate calendars. 
+          // For a simple robust setup, we just use the first user's ID or manage them separately.
+          // Since it's a 1:1 mapping in schema, we assume we sync mainly for the student OR admin (first connected).
+        }
+        continue;
+      }
+
+      // Create or Update
+      const safeStartTime = lesson.date as Date;
+      const safeEndTime = new Date(safeStartTime.getTime() + 60 * 60 * 1000);
+
+      const attendees = lesson.subscription.student.email ? [{ email: lesson.subscription.student.email }] : [];
+
+      if (lesson.google_event_id) {
+         await this.googleCalendarService.updateEvent(userId, lesson.google_event_id, {
+           summary,
+           startTime: safeStartTime,
+           endTime: safeEndTime,
+           attendees,
+         });
+      } else {
+         const eventId = await this.googleCalendarService.createEvent(userId, {
+           summary,
+           startTime: safeStartTime,
+           endTime: safeEndTime,
+           lessonId,
+           attendees,
+         });
+         
+         if (eventId) {
+           await this.prisma.subscriptionLesson.update({
+             where: { id: lessonId },
+             data: { google_event_id: eventId },
+           });
+           break; // Stop loop once created so we don't overwrite ID from another user's calendar. 
+           // In future, a table mapping lessonId -> userId -> google_event_id is needed for multi-calendar sync.
+         }
+      }
+    }
   }
 }
