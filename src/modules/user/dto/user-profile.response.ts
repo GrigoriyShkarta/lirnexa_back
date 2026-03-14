@@ -81,6 +81,9 @@ export class UserBaseResponse {
   @ApiPropertyOptional({ example: '2024-03-04T12:00:00.000Z', description: 'Date of the lesson for payment reminder' })
   payment_reminder_date?: Date | null;
 
+  @ApiPropertyOptional({ example: 'stream-token-string', description: 'Stream.io video token' })
+  stream_token?: string;
+
   @ApiPropertyOptional({ type: () => [NotificationResponse], description: 'User notifications' })
   notifications?: NotificationResponse[];
 }

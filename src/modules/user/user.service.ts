@@ -11,6 +11,7 @@ import { UpdateMeDto } from './dto/update-me.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UserQueryDto } from './dto/user-query.dto';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
+import { StreamService } from '../integrations/stream/stream.service';
 
 @Injectable()
 /**
@@ -22,6 +23,7 @@ export class UserService {
     private storageService: StorageService,
     @Inject(forwardRef(() => GoogleCalendarService))
     private googleCalendarService: GoogleCalendarService,
+    private streamService: StreamService,
   ) {}
 
   /**
@@ -204,6 +206,7 @@ export class UserService {
         personalization: personalization_data,
         dashboard_personalization,
       },
+      stream_token: this.streamService.generateToken(user.id),
     };
   }
 
