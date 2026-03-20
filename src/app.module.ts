@@ -11,6 +11,7 @@ import { TrackerModule } from './modules/tracker/tracker.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { GoogleCalendarModule } from './modules/integrations/google-calendar/google-calendar.module';
+import { StreamModule } from './modules/integrations/stream/stream.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { GoogleCalendarModule } from './modules/integrations/google-calendar/goo
     TrackerModule,
     NotificationModule,
     GoogleCalendarModule,
+    StreamModule,
   ],
 })
 /**

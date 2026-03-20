@@ -29,28 +29,36 @@ export class StorageService {
    * @returns The full public URL of the uploaded file.
    */
   async uploadFile(file: Express.Multer.File, path: string): Promise<string> {
-    const fileName = `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
+    return this.uploadBuffer(file.buffer, path, file.originalname, file.mimetype);
+  }
+
+  /**
+   * Uploads a buffer to Cloudflare R2.
+   * @param buffer The buffer to upload.
+   * @param path The path (key) under which to store the file.
+   * @param originalName The original filename.
+   * @param mimetype The MIME type of the file.
+   * @returns The full public URL of the uploaded file.
+   */
+  async uploadBuffer(buffer: Buffer, path: string, originalName: string, mimetype: string): Promise<string> {
+    const fileName = `${Date.now()}-${originalName.replace(/\s+/g, '_')}`;
     const key = `${path}/${fileName}`;
 
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype,
+      Body: buffer,
+      ContentType: mimetype,
     });
 
     await this.s3Client.send(command);
 
     const publicUrl = this.publicUrl || this.configService.get<string>('R2_PUBLIC_URL') || process.env.R2_PUBLIC_URL || '';
     
-    console.log('Final check for PUBLIC_URL in uploadFile:', publicUrl);
-
-    // Return full URL if publicUrl is configured, otherwise return the key
     if (publicUrl) {
       const baseUrl = publicUrl.endsWith('/') ? publicUrl.slice(0, -1) : publicUrl;
       const sanitizedKey = key.split('/').map(part => encodeURIComponent(part)).join('/');
       const fullUrl = `${baseUrl}/${sanitizedKey}`;
-      console.log('Constructed full URL:', fullUrl);
       return fullUrl;
     }
 

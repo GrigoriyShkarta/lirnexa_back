@@ -229,6 +229,28 @@ export class GoogleCalendarService {
     });
   }
 
+  /**
+   * Private helper to handle invalid Google OAuth2 grants (revoked or expired tokens).
+   * Automatically disconnects the user to prevent further errors.
+   */
+  private async handleInvalidGrant(userId: string, error: any): Promise<boolean> {
+    const errorBody = error.response?.data?.error || '';
+    const errorMessage = error.message || '';
+    
+    if (errorBody === 'invalid_grant' || errorMessage.includes('invalid_grant')) {
+      this.logger.warn(`Google Calendar access revoked or expired for user ${userId}. Automatically disconnecting...`);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          google_access_token: null,
+          google_refresh_token: null,
+        },
+      });
+      return true;
+    }
+    return false;
+  }
+
   // --- CRUD Operations ---
   
   /**
@@ -263,6 +285,7 @@ export class GoogleCalendarService {
 
       return response.data.id || null;
     } catch (error: any) {
+      if (await this.handleInvalidGrant(userId, error)) return null;
       const detail = error.response?.data?.error?.message || error.message;
       this.logger.error(`Error creating Google Calendar event for user ${userId}: ${detail}`);
       return null;
@@ -451,7 +474,8 @@ export class GoogleCalendarService {
       });
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      if (await this.handleInvalidGrant(userId, error)) return false;
       this.logger.error(`Error updating Google Calendar event ${eventId} for user ${userId}:`, error);
       return false;
     }
@@ -468,7 +492,8 @@ export class GoogleCalendarService {
       });
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      if (await this.handleInvalidGrant(userId, error)) return true;
       // Ignore 404s, it's already deleted
       if (error.code !== 404) {
         this.logger.error(`Error deleting Google Calendar event ${eventId} for user ${userId}:`, error);
@@ -531,7 +556,8 @@ export class GoogleCalendarService {
         html_link: item.htmlLink ?? null,
         color_id: item.colorId ?? null,
       }));
-    } catch (error) {
+    } catch (error: any) {
+      if (await this.handleInvalidGrant(userId, error)) return [];
       this.logger.error(`Error listing Google Calendar events for user ${userId}:`, error);
       return [];
     }
@@ -589,13 +615,15 @@ export class GoogleCalendarService {
               where: { id: lesson.id },
               data: { google_event_id: eventId },
           });
-        } catch (e) {
+        } catch (e: any) {
+          if (await this.handleInvalidGrant(userId, e)) return;
           this.logger.error(`Failed to sync lesson ${lesson.id} for user ${userId}: ${e.message}`);
           // Continue to next lesson
         }
       }
       this.logger.log(`Successfully synced ${lessons.length} existing future events for user ${userId}`);
-    } catch (e) {
+    } catch (e: any) {
+       if (await this.handleInvalidGrant(userId, e)) return;
        this.logger.error(`Error syncing existing events for user ${userId}:`, e);
     }
   }

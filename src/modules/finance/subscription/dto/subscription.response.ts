@@ -79,6 +79,9 @@ export class SubscriptionLessonResponseDto {
   @ApiProperty({ enum: SubscriptionLessonStatus })
   status: SubscriptionLessonStatus;
 
+  @ApiPropertyOptional()
+  recording_url: string | null;
+
   @ApiProperty()
   created_at: Date;
 

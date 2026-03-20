@@ -1,0 +1,25 @@
+/* Фон всего layout */
+body {
+  background-color: #1c1c1c; /* тёмный фон */
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Все видео участники занимают весь экран */
+.participant {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover; /* чтобы видео масштабировалось без искажений */
+  border-radius: 0 !important; /* убрать скругления */
+}
+
+/* Grid контейнер */
+.participants-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  grid-auto-rows: 1fr !important;
+  gap: 2px !important;
+  width: 100% !important;
+  height: 100% !important;
+}

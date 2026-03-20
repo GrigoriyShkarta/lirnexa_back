@@ -106,4 +106,14 @@ export class CreateUserDto {
   @IsBoolean()
   @IsOptional()
   can_student_edit_tracker?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Is lesson recording enabled for this student' })
+  @IsBoolean()
+  @IsOptional()
+  is_recording_enabled?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Can student download lesson recordings' })
+  @IsBoolean()
+  @IsOptional()
+  can_student_download_recording?: boolean;
 }

@@ -17,6 +17,7 @@ import { SubscriptionQueryDto } from './dto/subscription-query.dto';
 import { CreateStudentSubscriptionDto } from './dto/create-student-subscription.dto';
 import { UpdateStudentSubscriptionDto } from './dto/update-student-subscription.dto';
 import { UpdateLessonStatusDto } from './dto/update-lesson-status.dto';
+import { UpdateLessonRecordingDto } from './dto/update-lesson-recording.dto';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
@@ -120,8 +121,8 @@ export class SubscriptionController {
   @Get('student/:studentId')
   @ApiOperation({ summary: 'Get all subscriptions for a student' })
   @ApiOkResponse({ type: [StudentSubscriptionResponseDto] })
-  async getStudentSubscriptions(@Param('studentId') studentId: string) {
-    return this.subscriptionService.getStudentSubscriptions(studentId);
+  async getStudentSubscriptions(@Req() req: RequestWithUser, @Param('studentId') studentId: string) {
+    return this.subscriptionService.getStudentSubscriptions(studentId, req.user.role);
   }
 
   @Patch('student/:id')
@@ -135,6 +136,13 @@ export class SubscriptionController {
     return this.subscriptionService.updateStudentSubscription(id, dto);
   }
 
+  @Get('lesson/:lessonId')
+  @ApiOperation({ summary: 'Get details of a specific subscription lesson' })
+  @ApiOkResponse({ type: SubscriptionLessonResponseDto })
+  async getLessonById(@Req() req: RequestWithUser, @Param('lessonId') lessonId: string) {
+    return this.subscriptionService.getLessonById(lessonId, req.user.sub, req.user.role);
+  }
+
   @Patch('lesson/:lessonId')
   @Roles(Role.super_admin, Role.admin, Role.teacher)
   @ApiOperation({ summary: 'Update status or date of a specific lesson in a subscription' })
@@ -144,6 +152,25 @@ export class SubscriptionController {
     @Body() dto: UpdateLessonStatusDto,
   ) {
     return this.subscriptionService.updateLessonStatus(lessonId, dto);
+  }
+
+  @Patch('lesson/:lessonId/recording')
+  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  @ApiOperation({ summary: 'Update recording URL of a specific lesson in a subscription' })
+  @ApiOkResponse({ type: SubscriptionLessonResponseDto })
+  async updateLessonRecording(
+    @Param('lessonId') lessonId: string,
+    @Body() dto: UpdateLessonRecordingDto,
+  ) {
+    return this.subscriptionService.updateLessonRecording(lessonId, dto.recording_url);
+  }
+
+  @Delete('lesson/:lessonId/recording')
+  @Roles(Role.super_admin, Role.admin, Role.teacher)
+  @ApiOperation({ summary: 'Delete recording URL of a specific lesson in a subscription' })
+  @ApiOkResponse({ type: SubscriptionLessonResponseDto })
+  async deleteLessonRecording(@Param('lessonId') lessonId: string) {
+    return this.subscriptionService.deleteLessonRecording(lessonId);
   }
 
   @Delete('student/:id')

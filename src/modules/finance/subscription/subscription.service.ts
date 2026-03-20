@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
@@ -11,13 +12,51 @@ import { UpdateLessonStatusDto } from './dto/update-lesson-status.dto';
 import { TransactionQueryDto } from './dto/transaction-query.dto';
 import { CalendarQueryDto } from './dto/calendar-query.dto';
 import { GoogleCalendarService } from '../../integrations/google-calendar/google-calendar.service';
+import { StorageService } from '../../storage/storage.service';
 
 @Injectable()
 export class SubscriptionService {
+  private readonly logger = new Logger(SubscriptionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly googleCalendarService: GoogleCalendarService,
+    private readonly storageService: StorageService,
   ) {}
+
+  /**
+   * Daily cleanup of expired Stream recording links (14 days retention).
+   * Runs every day at 3 AM.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async cleanupExpiredRecordings() {
+    this.logger.log('Starting cleanup of expired Stream recording links...');
+    
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+    try {
+      const result = await this.prisma.subscriptionLesson.updateMany({
+        where: {
+          date: { lt: twoWeeksAgo },
+          recording_url: {
+            contains: 'stream-io-cdn.com', // Only target Stream temporary links
+          },
+        },
+        data: {
+          recording_url: null,
+        },
+      });
+
+      if (result.count > 0) {
+        this.logger.log(`Successfully removed ${result.count} expired Stream recording links.`);
+      } else {
+        this.logger.log('No expired Stream recording links found.');
+      }
+    } catch (error) {
+      this.logger.error('Failed to cleanup expired recordings:', error);
+    }
+  }
 
   async create(userId: string, userRole: Role, dto: CreateSubscriptionDto) {
     let super_admin_id: string | null = null;
@@ -161,10 +200,12 @@ export class SubscriptionService {
       );
     }
 
-    // Fetch student's super_admin_id to associate the subscription correctly
+    // Fetch student's super_admin_id
     const student = await this.prisma.user.findUnique({
       where: { id: dto.student_id },
-      select: { super_admin_id: true },
+      select: { 
+        super_admin_id: true,
+      },
     });
 
     const studentSuperAdminId = student?.super_admin_id || null;
@@ -220,24 +261,33 @@ export class SubscriptionService {
     return studentSubscription;
   }
 
-  async getStudentSubscriptions(studentId: string) {
+  async getStudentSubscriptions(studentId: string, userRole: Role) {
     const now = new Date();
 
     // Automatically mark past lessons as 'attended' unless they are 'burned' or already 'attended'
-    await this.prisma.subscriptionLesson.updateMany({
+    const result = await this.prisma.subscriptionLesson.updateMany({
       where: {
         subscription: { student_id: studentId },
-        date: { lt: now },
+        date: { lt: now, not: null }, // Only target lessons with a concrete past date
         status: 'scheduled',
       },
       data: { status: 'attended' },
     });
+
+    if (result.count > 0) {
+      this.logger.log(`Automatically marked ${result.count} past lessons as 'attended' for student ${studentId}`);
+    }
 
     const subscriptions = await this.prisma.studentSubscription.findMany({
       where: { student_id: studentId },
       include: {
         lessons: {
           orderBy: { date: 'asc' },
+        },
+        student: {
+          select: {
+            can_student_download_recording: true,
+          },
         },
         subscription: {
           select: {
@@ -251,9 +301,9 @@ export class SubscriptionService {
     });
 
     // Final in-memory sort to ensure they are ordered by lesson dates
-    return subscriptions.sort((a, b) => {
-      const aFirstLesson = b.lessons.find((l) => l.date);
-      const bFirstLesson = a.lessons.find((l) => l.date);
+    subscriptions.sort((a: any, b: any) => {
+      const aFirstLesson = a.lessons.find((l: any) => l.date);
+      const bFirstLesson = b.lessons.find((l: any) => l.date);
 
       if (!aFirstLesson && !bFirstLesson) return 0;
       if (!aFirstLesson) return 1;
@@ -261,6 +311,8 @@ export class SubscriptionService {
 
       return (aFirstLesson.date?.getTime() || 0) - (bFirstLesson.date?.getTime() || 0);
     });
+    
+    return subscriptions;
   }
 
   async updateStudentSubscription(id: string, dto: UpdateStudentSubscriptionDto) {
@@ -338,12 +390,41 @@ export class SubscriptionService {
     return updated;
   }
 
+  async getLessonById(lessonId: string, userId: string, userRole: Role) {
+    const lesson = await this.prisma.subscriptionLesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        subscription: {
+          include: {
+            student: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+                can_student_download_recording: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!lesson) {
+      throw new NotFoundException(`Lesson with ID ${lessonId} not found`);
+    }
+
+    return lesson;
+  }
+
   async updateLessonStatus(lessonId: string, dto: UpdateLessonStatusDto) {
+    this.logger.log(`Updating lesson status for lesson ${lessonId}. New status: ${dto.status}, Date provided: ${dto.date}`);
+    
     const current = await this.prisma.subscriptionLesson.findUnique({
       where: { id: lessonId },
     });
 
     if (!current) {
+      this.logger.warn(`Lesson with ID ${lessonId} not found during status update`);
       throw new NotFoundException(`Lesson with ID ${lessonId} not found`);
     }
 
@@ -364,6 +445,7 @@ export class SubscriptionService {
       // If the resulting date is in the past and we are in scheduled/rescheduled status, 
       // clear it to null to prevent the auto-marker from flipping it back to 'attended'.
       if (dateToUse && dateToUse < new Date()) {
+        this.logger.log(`Clearing past date for lesson ${lessonId} in ${status} status to prevent auto-attended mark`);
         data.date = null;
       } else if (dto.date !== undefined) {
         data.date = dateToUse;
@@ -380,13 +462,61 @@ export class SubscriptionService {
       },
     });
 
+    this.logger.log(`Successfully updated lesson ${lessonId} to status ${updated.status}. Syncing to Google Calendar...`);
+
     // Sync to Google Calendar
-    await this.syncLessonToGoogleCalendar(
-      lessonId,
-      [updated.subscription.student_id, updated.subscription.super_admin_id]
-    );
+    try {
+      await this.syncLessonToGoogleCalendar(
+        lessonId,
+        [updated.subscription.student_id, updated.subscription.super_admin_id]
+      );
+    } catch (error) {
+       this.logger.error(`Failed to sync lesson ${lessonId} to Google Calendar:`, error);
+    }
 
     return updated;
+  }
+
+  async updateLessonRecording(lessonId: string, recording_url: string) {
+    this.logger.log(`Updating recording URL for lesson ${lessonId}: ${recording_url}`);
+    
+    const current = await this.prisma.subscriptionLesson.findUnique({
+      where: { id: lessonId },
+    });
+
+    if (!current) {
+      this.logger.warn(`Lesson with ID ${lessonId} not found during recording update`);
+      throw new NotFoundException(`Lesson with ID ${lessonId} not found`);
+    }
+
+    if (current.recording_url && current.recording_url !== recording_url) {
+      this.logger.log(`Deleting old recording: ${current.recording_url}`);
+      await this.storageService.deleteFile(current.recording_url);
+    }
+
+    return this.prisma.subscriptionLesson.update({
+      where: { id: lessonId },
+      data: { recording_url },
+    });
+  }
+
+  async deleteLessonRecording(lessonId: string) {
+    const current = await this.prisma.subscriptionLesson.findUnique({
+      where: { id: lessonId },
+    });
+
+    if (!current) {
+      throw new NotFoundException(`Lesson with ID ${lessonId} not found`);
+    }
+
+    if (current.recording_url) {
+      await this.storageService.deleteFile(current.recording_url);
+    }
+
+    return this.prisma.subscriptionLesson.update({
+      where: { id: lessonId },
+      data: { recording_url: null },
+    });
   }
 
   async removeStudentSubscription(id: string) {
@@ -528,14 +658,13 @@ export class SubscriptionService {
       where,
       include: {
         subscription: {
-          select: {
-            id: true,
-            name: true,
+          include: {
             student: {
               select: {
                 id: true,
                 name: true,
                 avatar: true,
+                can_student_download_recording: true,
               },
             },
           },
@@ -610,13 +739,6 @@ export class SubscriptionService {
       if (lesson.status === 'rescheduled' || lesson.status === 'burned' || !lesson.date) {
         if (lesson.google_event_id) {
           await this.googleCalendarService.deleteEvent(userId, lesson.google_event_id);
-          // Only clear ID from DB if it was successfully deleted or we assume it's gone
-          // To prevent constant DB updates across loop passes for different users, 
-          // we are just syncing one-way per user. 
-          // Note: If multiple users track the same event, sharing the same google_event_id in DB 
-          // might be flawed if they have separate calendars. 
-          // For a simple robust setup, we just use the first user's ID or manage them separately.
-          // Since it's a 1:1 mapping in schema, we assume we sync mainly for the student OR admin (first connected).
         }
         continue;
       }
@@ -648,8 +770,7 @@ export class SubscriptionService {
              where: { id: lessonId },
              data: { google_event_id: eventId },
            });
-           break; // Stop loop once created so we don't overwrite ID from another user's calendar. 
-           // In future, a table mapping lessonId -> userId -> google_event_id is needed for multi-calendar sync.
+           break; 
          }
       }
     }

@@ -63,6 +63,8 @@ export const USER_SELECT_FIELDS = {
   deactivation_date: true,
   can_student_create_tracker: true,
   can_student_edit_tracker: true,
+  is_recording_enabled: true,
+  can_student_download_recording: true,
   personalization: {
     select: PERSONALIZATION_SELECT_FIELDS,
   },
@@ -107,6 +109,8 @@ export const USER_LIST_SELECT_FIELDS = {
   deactivation_date: true,
   can_student_create_tracker: true,
   can_student_edit_tracker: true,
+  is_recording_enabled: true,
+  can_student_download_recording: true,
   categories: {
     select: SELECT_CATEGORIES,
   },

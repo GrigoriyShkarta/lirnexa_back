@@ -12,4 +12,5 @@ export class UpdateLessonStatusDto {
   @IsEnum(SubscriptionLessonStatus)
   @IsOptional()
   status?: SubscriptionLessonStatus;
+
 }

@@ -84,6 +84,8 @@ export class UserService {
         categories: dto.categories ? { connect: dto.categories.map((id) => ({ id })) } : undefined,
         can_student_create_tracker: dto.can_student_create_tracker ?? false,
         can_student_edit_tracker: dto.can_student_edit_tracker ?? false,
+        is_recording_enabled: dto.is_recording_enabled ?? false,
+        can_student_download_recording: dto.can_student_download_recording ?? false,
       },
     });
 
@@ -661,6 +663,8 @@ export class UserService {
       is_avatar_locked: dto.is_avatar_locked,
       can_student_create_tracker: dto.can_student_create_tracker,
       can_student_edit_tracker: dto.can_student_edit_tracker,
+      is_recording_enabled: dto.is_recording_enabled,
+      can_student_download_recording: dto.can_student_download_recording,
     };
 
     if (dto.deactivation_date) {
