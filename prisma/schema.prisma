@@ -58,6 +58,8 @@ model User {
   managed_tracker_boards TrackerBoard[] @relation("SuperAdminToTrackerBoard")
   notifications          Notification[] @relation("UserToNotification")
   personal_events        PersonalEvent[]
+  boards                 Board[]        @relation("StudentToBoard")
+  managed_boards         Board[]        @relation("SuperAdminToBoard")
   
   is_recording_enabled           Boolean @default(false) @map("is_recording_enabled")
   can_student_download_recording Boolean @default(false) @map("can_student_download_recording")
@@ -451,6 +453,23 @@ model Notification {
 
   @@index([user_id])
   @@map("notifications")
+}
+
+model Board {
+  id             String   @id @default(uuid())
+  title          String   @default("Untitled Board")
+  student_id     String   @map("student_id")
+  super_admin_id String?  @map("super_admin_id")
+  settings       Json     @default("{\"bg_color\":\"auto\",\"grid_type\":\"none\",\"board_theme\":\"auto\"}")
+  preview_url    String?  @map("preview_url")
+  elements       Json     @default("[]")
+  created_at     DateTime @default(now()) @map("created_at")
+  updated_at     DateTime @updatedAt @map("updated_at")
+
+  student     User  @relation("StudentToBoard", fields: [student_id], references: [id], onDelete: Cascade)
+  super_admin User? @relation("SuperAdminToBoard", fields: [super_admin_id], references: [id])
+
+  @@map("boards")
 }
 
 model PersonalEvent {

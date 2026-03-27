@@ -12,6 +12,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { GoogleCalendarModule } from './modules/integrations/google-calendar/google-calendar.module';
 import { StreamModule } from './modules/integrations/stream/stream.module';
+import { BoardModule } from './modules/board/board.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { StreamModule } from './modules/integrations/stream/stream.module';
     NotificationModule,
     GoogleCalendarModule,
     StreamModule,
+    BoardModule,
   ],
 })
 /**
