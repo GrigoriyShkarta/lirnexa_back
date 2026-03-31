@@ -34,6 +34,17 @@ export class CreateCourseDto {
   @IsString({ each: true })
   category_ids?: string[];
 
+  @ApiPropertyOptional({ example: ['uuid1', 'uuid2'] })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value;
+    return [];
+  })
+  @IsArray()
+  @IsString({ each: true })
+  test_ids?: string[];
+
   @ApiProperty({ example: [] })
   @IsNotEmpty()
   content: any;

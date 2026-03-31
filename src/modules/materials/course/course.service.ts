@@ -19,10 +19,10 @@ export class CourseService {
         where: { id: userId },
         select: { super_admin_id: true },
       });
-      super_admin_id = user?.super_admin_id || null;
+    super_admin_id = user?.super_admin_id || null;
     }
 
-    const { category_id, category_ids, content, ...courseData } = dto;
+    const { category_id, category_ids, test_ids, content, ...courseData } = dto;
     const finalCategories = category_ids || category_id;
 
     return this.prisma.course.create({
@@ -32,6 +32,7 @@ export class CourseService {
         author_id: userId,
         super_admin_id,
         categories: finalCategories ? { connect: (Array.isArray(finalCategories) ? finalCategories : [finalCategories]).map(id => ({ id })) } : undefined,
+        tests: test_ids ? { connect: test_ids.map(id => ({ id })) } : undefined,
       },
     });
   }
@@ -92,9 +93,6 @@ export class CourseService {
 
       where = { 
         id: { in: filteredCourseIds },
-        // If we have search/categories they were already used to find candidateCourses, 
-        // but we can re-apply them to be safe if where was completely replaced.
-        // Actually, candidateCourses was fetched with where, so just using IDs is enough.
       };
     }
 
@@ -114,6 +112,7 @@ export class CourseService {
             },
           },
           categories: true,
+          tests: { select: { id: true, name: true } },
         },
       }),
       this.prisma.course.count({ where }),
@@ -123,6 +122,7 @@ export class CourseService {
     const dataWithFallback = data.map(item => ({
       ...item,
       category: item.categories?.[0] || null,
+      tests: item.tests.map(t => ({ ...t, title: t.name })),
     }));
 
     const enrichedData = await this.fillCoursesMetadata(targetStudentId, userRole, dataWithFallback);
@@ -152,6 +152,7 @@ export class CourseService {
           },
         },
         categories: true,
+        tests: { select: { id: true, name: true } },
       },
     });
 
@@ -162,6 +163,7 @@ export class CourseService {
     const withFallback = {
       ...course,
       category: course.categories?.[0] || null,
+      tests: course.tests.map(t => ({ ...t, title: t.name })),
     };
 
     const [enriched] = await this.fillCoursesMetadata(targetStudentId, userRole, [withFallback]);
@@ -169,7 +171,7 @@ export class CourseService {
   }
 
   async update(id: string, dto: UpdateCourseDto) {
-    const { category_id, category_ids, content, ...courseData } = dto;
+    const { category_id, category_ids, test_ids, content, ...courseData } = dto as any;
     const data: any = { ...courseData };
 
     if (content) {
@@ -179,6 +181,10 @@ export class CourseService {
     const finalCategories = category_ids || category_id;
     if (finalCategories) {
       data.categories = { set: (Array.isArray(finalCategories) ? finalCategories : [finalCategories]).map(id => ({ id })) };
+    }
+
+    if (test_ids) {
+      data.tests = { set: test_ids.map(id => ({ id })) };
     }
 
     return this.prisma.course.update({
@@ -218,45 +224,97 @@ export class CourseService {
       });
     });
 
-    // 2. Fetch lesson details
-    const lessons = allLessonIds.size > 0 
-      ? await this.prisma.lesson.findMany({
-          where: { id: { in: Array.from(allLessonIds) } },
-          select: { id: true, duration: true, name: true }
-        })
-      : [];
-    const lessonInfoMap = new Map(lessons.map(l => [l.id, { duration: l.duration || 0, title: l.name }]));
+    // 2. Fetch lesson and test details
+    const allTestIds = new Set<string>();
+    courses.forEach(course => {
+      const content = Array.isArray(course.content) ? course.content : [];
+      content.forEach((item: any) => {
+        if (item.type === 'test' && item.test_id) {
+          allTestIds.add(item.test_id);
+        }
+      });
+    });
 
-    // 3. Fetch student access info for these lessons
-    const accesses = (userId && allLessonIds.size > 0)
-      ? await this.prisma.materialAccess.findMany({
+    const [lessons, tests] = await Promise.all([
+      allLessonIds.size > 0 
+        ? this.prisma.lesson.findMany({
+            where: { id: { in: Array.from(allLessonIds) } },
+            select: { id: true, duration: true, name: true }
+          })
+        : [],
+      allTestIds.size > 0
+        ? this.prisma.test.findMany({
+            where: { id: { in: Array.from(allTestIds) } },
+            select: { id: true, name: true }
+          })
+        : []
+    ]);
+
+    const lessonInfoMap = new Map<string, { duration: number; title: string }>(
+      lessons.map(l => [l.id, { duration: l.duration || 0, title: l.name }] as const)
+    );
+    const testInfoMap = new Map<string, { title: string }>(
+      tests.map(t => [t.id, { title: t.name }] as const)
+    );
+
+    // 3. Fetch student access info for these lessons and tests
+    const [accesses, testAccesses] = (userId && (allLessonIds.size > 0 || allTestIds.size > 0))
+      ? await Promise.all([
+          allLessonIds.size > 0 
+            ? this.prisma.materialAccess.findMany({
+                where: {
+                  student_id: userId,
+                  material_type: 'lesson',
+                  lesson_id: { in: Array.from(allLessonIds) }
+                }
+              })
+            : [],
+          allTestIds.size > 0
+            ? this.prisma.materialAccess.findMany({
+                where: {
+                  student_id: userId,
+                  material_type: 'test',
+                  test_id: { in: Array.from(allTestIds) }
+                }
+              })
+            : []
+        ])
+      : [[], []];
+
+    const accessMap = new Map<string, any>(accesses.map(a => [a.lesson_id as string, a] as const));
+    const testAccessMap = new Map<string, any>(testAccesses.map(a => [a.test_id as string, a] as const));
+
+    // 3.5. Fetch test completion status for student
+    const testAttempts = (userId && isStudent && allTestIds.size > 0)
+      ? await this.prisma.testAttempt.findMany({
           where: {
             student_id: userId,
-            material_type: 'lesson',
-            lesson_id: { in: Array.from(allLessonIds) }
-          }
+            test_id: { in: Array.from(allTestIds) },
+            is_passed: true,
+          },
+          select: { test_id: true }
         })
       : [];
-    const accessMap = new Map(accesses.map(a => [a.lesson_id as string, a]));
+    const passedTestIds = new Set(testAttempts.map(a => a.test_id));
 
     // 4. Enrich courses
     return courses.map(course => {
       const content = Array.isArray(course.content) ? course.content : [];
       let totalDuration = 0;
-      let totalLessonsCount = 0;
-      let accessibleLessonsCount = 0;
+      let totalItemsCount = 0;
+      let accessibleItemsCount = 0;
 
       const enrichedContent = content.map((item: any) => {
         if (!item || typeof item !== 'object') return item;
 
         if (item.type === 'lesson' && item.lesson_id) {
-          totalLessonsCount++;
+          totalItemsCount++;
           const lessonInfo = lessonInfoMap.get(item.lesson_id);
           const duration = lessonInfo?.duration || 0;
           totalDuration += duration;
           
           const access = accessMap.get(item.lesson_id);
-          if (access) accessibleLessonsCount++;
+          if (access) accessibleItemsCount++;
           
           return {
             ...item,
@@ -267,14 +325,28 @@ export class CourseService {
           };
         }
 
+        if (item.type === 'test' && item.test_id) {
+          totalItemsCount++;
+          const testInfo = testInfoMap.get(item.test_id);
+          const access = testAccessMap.get(item.test_id);
+          if (access) accessibleItemsCount++;
+          
+          return {
+            ...item,
+            title: testInfo?.title || '',
+            has_access: !!access,
+            is_passed: isStudent ? passedTestIds.has(item.test_id) : true
+          };
+        }
+
         if (item.type === 'group' && Array.isArray(item.lesson_ids)) {
           const groupLessons = item.lesson_ids.map((id: string) => {
-            totalLessonsCount++;
+            totalItemsCount++;
             const lessonInfo = lessonInfoMap.get(id);
             const duration = lessonInfo?.duration || 0;
             totalDuration += duration;
             const access = accessMap.get(id);
-            if (access) accessibleLessonsCount++;
+            if (access) accessibleItemsCount++;
             
             return {
               lesson_id: id,
@@ -298,9 +370,9 @@ export class CourseService {
         ...course,
         content: enrichedContent,
         duration: totalDuration,
-        has_access: accessibleLessonsCount > 0,
-        progress_percentage: totalLessonsCount > 0 
-          ? Math.round((accessibleLessonsCount / totalLessonsCount) * 100) 
+        has_access: accessibleItemsCount > 0,
+        progress_percentage: totalItemsCount > 0 
+          ? Math.round((accessibleItemsCount / totalItemsCount) * 100) 
           : 0
       };
     });

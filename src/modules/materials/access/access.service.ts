@@ -96,6 +96,7 @@ export class AccessService {
             ...(req.material_type === MaterialType.video ? { video_id: req.material_id } : {}),
             ...(req.material_type === MaterialType.audio ? { audio_id: req.material_id } : {}),
             ...(req.material_type === MaterialType.file ? { file_id: req.material_id } : {}),
+            ...(req.material_type === MaterialType.test ? { test_id: req.material_id } : {}),
           },
         }),
       );
@@ -124,6 +125,7 @@ export class AccessService {
         video: true,
         audio: true,
         file: true,
+        test: true,
       },
     });
   }
@@ -173,6 +175,7 @@ export class AccessService {
             ...(mat.type === MaterialType.video ? { video_id: mat.id } : {}),
             ...(mat.type === MaterialType.audio ? { audio_id: mat.id } : {}),
             ...(mat.type === MaterialType.file ? { file_id: mat.id } : {}),
+            ...(mat.type === MaterialType.test ? { test_id: mat.id } : {}),
           },
         });
       });
@@ -198,6 +201,9 @@ export class AccessService {
         break;
       case MaterialType.file:
         exists = !!(await this.prisma.materialFile.findUnique({ where: { id } }));
+        break;
+      case MaterialType.test:
+        exists = !!(await this.prisma.test.findUnique({ where: { id } }));
         break;
       default:
         throw new BadRequestException(`Unknown material type: ${type}`);
@@ -244,7 +250,7 @@ export class AccessService {
       // Check for material ID in props
       if (item.type && item.props) {
         const props = item.props;
-        const mId = props.id || props.photo_id || props.video_id || props.audio_id || props.file_id;
+        const mId = props.id || props.photo_id || props.video_id || props.audio_id || props.file_id || props.test_id;
         
         if (mId) {
           if (item.type === 'image' || item.type === 'photo') {
@@ -255,6 +261,8 @@ export class AccessService {
             materials.push({ id: mId, type: MaterialType.audio });
           } else if (item.type === 'file' || item.type === 'attachment') {
             materials.push({ id: mId, type: MaterialType.file });
+          } else if (item.type === 'test' || item.type === 'quiz') {
+            materials.push({ id: mId, type: MaterialType.test });
           }
         }
       }

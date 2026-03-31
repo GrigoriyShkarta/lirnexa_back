@@ -67,6 +67,10 @@ model User {
   google_access_token  String? @map("google_access_token")
   google_refresh_token String? @map("google_refresh_token")
 
+  authored_tests Test[]        @relation("UserToTest")
+  managed_tests  Test[]        @relation("SuperAdminToTest")
+  test_attempts  TestAttempt[] @relation("StudentToTestAttempt")
+
   @@map("users")
 }
 
@@ -285,6 +289,7 @@ enum MaterialType {
   video
   audio
   file
+  test
 }
 
 model MaterialAccess {
@@ -299,6 +304,7 @@ model MaterialAccess {
   video_id  String? @map("video_id")
   audio_id  String? @map("audio_id")
   file_id   String? @map("file_id")
+  test_id   String? @map("test_id")
 
   full_access       Boolean  @default(true) @map("full_access")
   accessible_blocks String[] @default([]) @map("accessible_blocks")
@@ -314,6 +320,7 @@ model MaterialAccess {
   video  Video?        @relation(fields: [video_id], references: [id], onDelete: Cascade)
   audio  Audio?        @relation(fields: [audio_id], references: [id], onDelete: Cascade)
   file   MaterialFile? @relation(fields: [file_id], references: [id], onDelete: Cascade)
+  test   Test?         @relation(fields: [test_id], references: [id], onDelete: Cascade)
 
   @@unique([student_id, material_type, material_id])
   @@map("material_access")
@@ -357,6 +364,7 @@ model Category {
   files       MaterialFile[] @relation("CategoryToFile")
   lessons     Lesson[]       @relation("CategoryToLesson")
   courses     Course[]       @relation("CategoryToCourse")
+  tests       Test[]         @relation("CategoryToTest")
 
   @@map("categories")
 }
@@ -375,6 +383,7 @@ model Course {
   author      User       @relation("UserToCourse", fields: [author_id], references: [id])
   super_admin User?      @relation("SuperAdminToCourse", fields: [super_admin_id], references: [id])
   categories  Category[] @relation("CategoryToCourse")
+  tests       Test[]     @relation("CourseToTest")
 
   @@map("courses")
 }
@@ -486,4 +495,54 @@ model PersonalEvent {
   updated_at      DateTime @updatedAt @map("updated_at")
 
   @@map("personal_events")
+}
+
+model Test {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  settings       Json     @default("{\"passing_score\": 0, \"time_limit\": null}")
+  content        Json     @default("[]")
+  author_id      String   @map("author_id")
+  super_admin_id String?  @map("super_admin_id")
+  created_at     DateTime @default(now()) @map("created_at")
+  updated_at     DateTime @updatedAt @map("updated_at")
+
+  author      User          @relation("UserToTest", fields: [author_id], references: [id])
+  super_admin User?         @relation("SuperAdminToTest", fields: [super_admin_id], references: [id])
+  categories  Category[]    @relation("CategoryToTest")
+  courses     Course[]      @relation("CourseToTest")
+  access      MaterialAccess[]
+  attempts    TestAttempt[]
+
+  @@map("tests")
+}
+
+model TestAttempt {
+  id           String     @id @default(uuid())
+  test_id      String     @map("test_id")
+  student_id   String     @map("student_id")
+  score        Int?       @default(0)
+  total_points Int?       @default(0) @map("total_points")
+  time_spent   Int        @default(0) @map("time_spent")
+  is_passed    Boolean    @default(false) @map("is_passed")
+  answers      Json       @default("[]")
+  status       TestStatus @default(in_progress)
+  started_at   DateTime   @default(now()) @map("started_at")
+  completed_at DateTime?  @map("completed_at")
+  created_at   DateTime   @default(now()) @map("created_at")
+  updated_at   DateTime   @updatedAt @map("updated_at")
+
+  test    Test @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  student User @relation("StudentToTestAttempt", fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@map("test_attempts")
+}
+
+enum TestStatus {
+  in_progress
+  completed
+  pending_review
+  reviewed
+  timed_out
 }

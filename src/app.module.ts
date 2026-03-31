@@ -13,6 +13,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { GoogleCalendarModule } from './modules/integrations/google-calendar/google-calendar.module';
 import { StreamModule } from './modules/integrations/stream/stream.module';
 import { BoardModule } from './modules/board/board.module';
+import { TestsModule } from './modules/tests/tests.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { BoardModule } from './modules/board/board.module';
     GoogleCalendarModule,
     StreamModule,
     BoardModule,
+    TestsModule,
   ],
 })
 /**

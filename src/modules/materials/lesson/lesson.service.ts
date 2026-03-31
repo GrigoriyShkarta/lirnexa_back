@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
@@ -140,6 +140,7 @@ export class LessonService {
   }
 
   async findOne(id: string, userId: string, userRole: Role, from_student?: boolean, student_id?: string) {
+    const isStudent = userRole === Role.student;
     const targetStudentId = student_id || userId;
     const lesson = await this.prisma.lesson.findUnique({
       where: { id },
@@ -153,7 +154,7 @@ export class LessonService {
           },
         },
         categories: true,
-        access: (from_student || student_id) ? {
+        access: (from_student || student_id || isStudent) ? {
           where: {
             student_id: targetStudentId,
             material_type: 'lesson',
@@ -170,11 +171,11 @@ export class LessonService {
     let accessibleBlocks: string[] = [];
     let isFullAccess = false;
 
-    if (from_student || student_id) {
+    if (from_student || student_id || isStudent) {
       const userAccess = (lesson as any).access?.[0];
       
-      if (from_student && !userAccess) {
-        throw new NotFoundException(`Access to lesson not found for this student`);
+      if ((from_student || isStudent) && !userAccess) {
+        throw new ForbiddenException(`access_denied_lesson`);
       }
 
       if (userAccess) {
