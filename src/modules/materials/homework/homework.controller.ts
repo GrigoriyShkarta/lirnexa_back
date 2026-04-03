@@ -114,6 +114,13 @@ export class HomeworkController {
     return this.homeworkService.get_submissions(id, req.user.sub, req.user.role);
   }
 
+  @Get('submissions/:id')
+  @ApiOperation({ summary: 'Get a single homework submission by ID' })
+  @ApiOkResponse({ type: HomeworkSubmissionResponseDto })
+  async get_submission_by_id(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.homeworkService.get_submission_by_id(id, req.user.sub, req.user.role);
+  }
+
   @Get('submissions/my')
   @Roles(Role.student)
   @ApiOperation({ summary: 'Get my current submission for a homework by query param' })
@@ -130,7 +137,7 @@ export class HomeworkController {
     return this.homeworkService.get_my_submission(id, req.user.sub);
   }
 
-  @Patch('submission/:id/review')
+  @Patch('submissions/:id/review')
   @Roles(Role.super_admin, Role.admin, Role.teacher)
   @ApiOperation({ summary: 'Review and grade a homework submission' })
   @ApiOkResponse({ type: HomeworkSubmissionResponseDto })

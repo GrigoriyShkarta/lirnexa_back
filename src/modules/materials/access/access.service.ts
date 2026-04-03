@@ -46,7 +46,7 @@ export class AccessService {
 
       for (const lesson of lessons) {
         // Only grant access to internal materials if the lesson flag is true
-        if (lesson.add_files_to_materials !== false) {
+        if (lesson.add_files_to_materials === true) {
           // If partial access, only extract from allowed blocks
           const blocksToParse = full_access === false ? accessible_blocks : undefined;
           const internalMaterials = this.extractMaterialsFromContent(lesson.content, blocksToParse);
@@ -59,6 +59,7 @@ export class AccessService {
                 r.material_type === mat.type
               );
               if (!exists) {
+                console.log(`Auto-granting ${mat.type} (${mat.id}) from lesson ${lesson.id} to student ${student_id}`);
                 allGrantRequests.push({ student_id, material_id: mat.id, material_type: mat.type });
               }
             }
@@ -197,7 +198,9 @@ export class AccessService {
             },
           },
           update: {
-             granted_by_id: access.granted_by_id, // Keep the same granter
+            full_access: true,
+            accessible_blocks: [],
+            granted_by_id: access.granted_by_id, // Keep the same granter
           },
           create: {
             student_id: access.student_id,
@@ -275,30 +278,30 @@ export class AccessService {
         }
       }
 
-      if (typeof item !== 'object') return;
+      if (typeof item !== 'object' || item === null) return;
 
       if (Array.isArray(item)) {
         item.forEach(processItem);
         return;
       }
 
-      // Check for material ID in props
-      if (item.type && item.props) {
-        const props = item.props;
-        const mId = props.id || props.photo_id || props.video_id || props.audio_id || props.file_id || props.test_id;
-        
-        if (mId) {
-          if (item.type === 'image' || item.type === 'photo') {
-            materials.push({ id: mId, type: MaterialType.photo });
-          } else if (item.type === 'video') {
-            materials.push({ id: mId, type: MaterialType.video });
-          } else if (item.type === 'audio') {
-            materials.push({ id: mId, type: MaterialType.audio });
-          } else if (item.type === 'file' || item.type === 'attachment') {
-            materials.push({ id: mId, type: MaterialType.file });
-          } else if (item.type === 'test' || item.type === 'quiz') {
-            materials.push({ id: mId, type: MaterialType.test });
-          }
+      // Check for material ID
+      const mId = item.id || 
+                  (item.props && (item.props.id || item.props.photo_id || item.props.video_id || item.props.audio_id || item.props.file_id || item.props.test_id));
+      
+      const type = item.type;
+      
+      if (mId && typeof mId === 'string' && mId.length > 5) { // Basic length check to avoid false positives with short generic strings
+        if (type === 'image' || type === 'photo') {
+          materials.push({ id: mId, type: MaterialType.photo });
+        } else if (type === 'video') {
+          materials.push({ id: mId, type: MaterialType.video });
+        } else if (type === 'audio') {
+          materials.push({ id: mId, type: MaterialType.audio });
+        } else if (type === 'file' || type === 'attachment') {
+          materials.push({ id: mId, type: MaterialType.file });
+        } else if (type === 'test' || type === 'quiz') {
+          materials.push({ id: mId, type: MaterialType.test });
         }
       }
 

@@ -13,6 +13,7 @@ import { UserQueryDto } from './dto/user-query.dto';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 import { StreamService } from '../integrations/stream/stream.service';
 import { TestsService } from '../tests/tests.service';
+import { HomeworkService } from '../materials/homework/homework.service';
 
 @Injectable()
 /**
@@ -26,6 +27,7 @@ export class UserService {
     private googleCalendarService: GoogleCalendarService,
     private streamService: StreamService,
     private testsService: TestsService,
+    private homeworkService: HomeworkService,
   ) {}
 
   /**
@@ -212,6 +214,7 @@ export class UserService {
       },
       stream_token: this.streamService.generateToken(user.id),
       tests_to_review_count: await this.testsService.get_pending_review_count(user.id, user.role),
+      homeworks_to_review_count: await this.homeworkService.get_pending_review_count(user.id, user.role),
     };
   }
 

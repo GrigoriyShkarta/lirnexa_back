@@ -122,15 +122,29 @@ export class HomeworkService {
    * @returns Paginated list of homeworks.
    */
   async get_all(requester_id: string, requester_role: Role, query: HomeworkQueryDto) {
-    const { page = 1, limit = 10, search, category_ids, lesson_id, from_student, student_id } = query;
+    const { page = 1, limit = 10, search, category_ids, lesson_id, from_student, student_id, statuses, status } = query;
     const skip = (page - 1) * limit;
 
     const user = await this.prisma.user.findUnique({ where: { id: requester_id }, select: { super_admin_id: true } });
     const super_admin_id = requester_role === Role.super_admin ? requester_id : user?.super_admin_id;
 
+    const effectiveStatuses = statuses || (status ? [status] : undefined);
+
     const where: Prisma.HomeworkWhereInput = {
       ...(requester_role !== Role.super_admin && requester_role !== Role.admin && { super_admin_id }),
-      ...(search && { name: { contains: search, mode: 'insensitive' } }),
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          {
+            submissions: {
+              some: {
+                student: { name: { contains: search, mode: 'insensitive' } },
+                ...( (requester_role === Role.student || from_student) && { student_id: student_id || requester_id } )
+              }
+            }
+          }
+        ]
+      }),
       ...(category_ids && category_ids.length > 0 && {
         categories: { some: { id: { in: category_ids } } },
       }),
@@ -143,6 +157,14 @@ export class HomeworkService {
             },
           },
         },
+      }),
+      ...(effectiveStatuses && effectiveStatuses.length > 0 && {
+        submissions: {
+          some: {
+            status: { in: effectiveStatuses as HomeworkStatus[] },
+            ...( (requester_role === Role.student || from_student) && { student_id: student_id || requester_id } )
+          }
+        }
       }),
     };
 
@@ -157,10 +179,29 @@ export class HomeworkService {
           lesson: { select: { id: true, name: true } },
           _count: { select: { submissions: true } },
           submissions: (requester_role === Role.student || from_student) ? {
-            where: { student_id: student_id || requester_id },
+            where: {
+              student_id: student_id || requester_id,
+              ...(effectiveStatuses && effectiveStatuses.length > 0 && { status: { in: effectiveStatuses as HomeworkStatus[] } }),
+              ...(search && {
+                homework: { name: { contains: search, mode: 'insensitive' } } // For students, search by homework name
+              })
+            },
             orderBy: { created_at: 'desc' },
             take: 1,
-          } : false,
+            include: { student: { select: { id: true, name: true, avatar: true } } },
+          } : {
+            where: {
+              ...(effectiveStatuses && effectiveStatuses.length > 0 && { status: { in: effectiveStatuses as HomeworkStatus[] } }),
+              ...(search && {
+                OR: [
+                  { student: { name: { contains: search, mode: 'insensitive' } } },
+                  { homework: { name: { contains: search, mode: 'insensitive' } } }
+                ]
+              })
+            },
+            orderBy: { created_at: 'desc' },
+            include: { student: { select: { id: true, name: true, avatar: true } } },
+          },
         },
         orderBy: { created_at: 'desc' },
       }),
@@ -234,7 +275,19 @@ export class HomeworkService {
   async find_by_id(id: string, requester_id: string, requester_role: Role) {
     const homework = await this.prisma.homework.findUnique({
       where: { id },
-      include: { lesson: true, categories: true },
+      include: {
+        lesson: true,
+        categories: true,
+        submissions: (requester_role === Role.student) ? {
+          where: { student_id: requester_id },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          include: { student: { select: { id: true, name: true, avatar: true } } },
+        } : {
+          include: { student: { select: { id: true, name: true, avatar: true } } },
+          orderBy: { created_at: 'desc' },
+        },
+      },
     });
 
     if (!homework) throw new NotFoundException('homework_not_found');
@@ -417,14 +470,35 @@ export class HomeworkService {
 
     await this.check_homework_ownership(submission.homework, teacher_id, teacher_role);
 
-    return this.prisma.homeworkSubmission.update({
+    const updated = await this.prisma.homeworkSubmission.update({
       where: { id: submission_id },
       data: {
         feedback: dto.feedback,
         status: dto.status,
         reviewed_by_id: teacher_id,
       },
+      include: { homework: true },
     });
+
+    await this.prisma.notification.create({
+      data: {
+        user_id: updated.student_id,
+        message_id: updated.homework.lesson_id || updated.homework.id,
+        message_title: updated.homework.name,
+        message_type: 'homework_reviewed',
+        message: 'homework_reviewed',
+        payload: {
+          lesson_id: updated.homework.lesson_id,
+          homework_id: updated.homework.id,
+          homework_name: updated.homework.name,
+          submission_id: updated.id,
+          status: updated.status,
+          feedback: updated.feedback,
+        },
+      },
+    }).catch(err => this.logger.error(`Failed to create homework review notification: ${err.message}`));
+
+    return updated;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -445,5 +519,77 @@ export class HomeworkService {
     if (homework.super_admin_id !== super_admin_id && homework.author_id !== requester_id) {
       throw new ForbiddenException('unauthorized_homework_access');
     }
+  }
+
+  /**
+   * Returns a single homework submission by its ID.
+   * @param id Submission ID.
+   * @param requester_id The user ID of the requester.
+   * @param requester_role The role of the requester.
+   * @returns Submission object.
+   */
+  async get_submission_by_id(id: string, requester_id: string, requester_role: Role) {
+    const submission = await this.prisma.homeworkSubmission.findUnique({
+      where: { id },
+      include: {
+        homework: { include: { lesson: { select: { id: true, name: true } } } },
+        student: { select: { id: true, name: true, avatar: true } },
+      },
+    });
+
+    if (!submission) throw new NotFoundException('submission_not_found');
+
+    if (requester_role === Role.student && submission.student_id !== requester_id) {
+      throw new ForbiddenException('unauthorized_submission_access');
+    }
+
+    if (requester_role !== Role.student) {
+      await this.check_homework_ownership(submission.homework, requester_id, requester_role);
+    }
+
+    return submission;
+  }
+
+  /**
+   * Gets total count of pending homework reviews across all homeworks based on role and requester.
+   */
+  async get_pending_review_count(
+    requester_id: string,
+    requester_role: Role,
+  ): Promise<number> {
+    if (requester_role === Role.student) return 0;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: requester_id },
+      select: { super_admin_id: true },
+    });
+
+    if (!user) return 0;
+
+    const super_admin_id = requester_role === Role.super_admin ? requester_id : user.super_admin_id;
+
+    if (requester_role === Role.super_admin || requester_role === Role.admin) {
+      return this.prisma.homeworkSubmission.count({
+        where: {
+          status: 'pending',
+          homework: {
+            super_admin_id: super_admin_id,
+          },
+        },
+      });
+    }
+
+    if (requester_role === Role.teacher) {
+      return this.prisma.homeworkSubmission.count({
+        where: {
+          status: 'pending',
+          student: {
+            teacher_id: requester_id,
+          },
+        },
+      });
+    }
+
+    return 0;
   }
 }

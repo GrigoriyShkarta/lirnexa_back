@@ -239,7 +239,7 @@ export class CourseService {
       allLessonIds.size > 0 
         ? this.prisma.lesson.findMany({
             where: { id: { in: Array.from(allLessonIds) } },
-            select: { id: true, duration: true, name: true }
+            select: { id: true, duration: true, name: true, homework: { select: { id: true, name: true } } }
           })
         : [],
       allTestIds.size > 0
@@ -250,8 +250,8 @@ export class CourseService {
         : []
     ]);
 
-    const lessonInfoMap = new Map<string, { duration: number; title: string }>(
-      lessons.map(l => [l.id, { duration: l.duration || 0, title: l.name }] as const)
+    const lessonInfoMap = new Map<string, { duration: number; title: string; homework: any }>(
+      lessons.map(l => [l.id, { duration: l.duration || 0, title: l.name, homework: l.homework }] as const)
     );
     const testInfoMap = new Map<string, { title: string }>(
       tests.map(t => [t.id, { title: t.name }] as const)
@@ -297,6 +297,29 @@ export class CourseService {
       : [];
     const passedTestIds = new Set(testAttempts.map(a => a.test_id));
 
+    // 3.6. Fetch homework submission status for student
+    const homeworkIds = new Set<string>();
+    lessonInfoMap.forEach(lesson => {
+      if (lesson.homework) homeworkIds.add(lesson.homework.id);
+    });
+
+    const homeworkSubmissions = (userId && isStudent && homeworkIds.size > 0)
+      ? await this.prisma.homeworkSubmission.findMany({
+          where: {
+            student_id: userId,
+            homework_id: { in: Array.from(homeworkIds) },
+          },
+          orderBy: { created_at: 'desc' }
+        })
+      : [];
+
+    const homeworkStatusMap = new Map<string, string>();
+    homeworkSubmissions.forEach(sub => {
+      if (!homeworkStatusMap.has(sub.homework_id)) {
+        homeworkStatusMap.set(sub.homework_id, sub.status);
+      }
+    });
+
     // 4. Enrich courses
     return courses.map(course => {
       const content = Array.isArray(course.content) ? course.content : [];
@@ -316,12 +339,21 @@ export class CourseService {
           const access = accessMap.get(item.lesson_id);
           if (access) accessibleItemsCount++;
           
+          let itemHomework = lessonInfo?.homework || null;
+          if (itemHomework && isStudent) {
+            itemHomework = {
+              ...itemHomework,
+              status: homeworkStatusMap.get(itemHomework.id) || 'not_submitted'
+            };
+          }
+
           return {
             ...item,
             title: lessonInfo?.title || '',
             duration,
             has_access: !!access,
-            access_type: access ? (access.full_access ? 'full' : 'partial') : 'none'
+            access_type: access ? (access.full_access ? 'full' : 'partial') : 'none',
+            homework: itemHomework
           };
         }
 
@@ -348,12 +380,21 @@ export class CourseService {
             const access = accessMap.get(id);
             if (access) accessibleItemsCount++;
             
+            let itemHomework = lessonInfo?.homework || null;
+            if (itemHomework && isStudent) {
+              itemHomework = {
+                ...itemHomework,
+                status: homeworkStatusMap.get(itemHomework.id) || 'not_submitted'
+              };
+            }
+            
             return {
               lesson_id: id,
               title: lessonInfo?.title || '',
               duration,
               has_access: !!access,
-              access_type: access ? (access.full_access ? 'full' : 'partial') : 'none'
+              access_type: access ? (access.full_access ? 'full' : 'partial') : 'none',
+              homework: itemHomework
             };
           });
           

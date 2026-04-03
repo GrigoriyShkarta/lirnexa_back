@@ -248,6 +248,7 @@ export class LessonService {
       accessible_blocks: accessibleBlocks,
       full_access: isFullAccess,
       homework_status,
+      homework_submission: (lesson.homework as any)?.submissions?.[0] || null,
     };
 
     const [withCourses] = await this.fillLessonsWithCourses(
@@ -308,7 +309,7 @@ export class LessonService {
       });
     }
 
-    if (content) {
+    if (content !== undefined || dto.add_files_to_materials !== undefined) {
       await this.accessService.sync_lesson_materials_access(lesson.id);
     }
 

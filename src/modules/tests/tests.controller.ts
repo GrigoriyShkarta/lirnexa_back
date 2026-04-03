@@ -173,8 +173,9 @@ export class TestsController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
+    @Query('search') search?: string,
   ): Promise<{ data: AttemptResponseDto[], meta: any }> {
-    return this.tests_service.find_attempts_paginated(undefined, page, limit, status);
+    return this.tests_service.find_attempts_paginated(undefined, page, limit, status, search);
   }
 
   /**
@@ -190,8 +191,9 @@ export class TestsController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
+    @Query('search') search?: string,
   ): Promise<{ data: AttemptResponseDto[], meta: any }> {
-    return this.tests_service.find_attempts_paginated(test_id, page, limit, status);
+    return this.tests_service.find_attempts_paginated(test_id, page, limit, status, search);
   }
 
   /**

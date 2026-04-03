@@ -131,4 +131,21 @@ export class HomeworkQueryDto {
   @IsOptional()
   @IsString()
   lesson_id?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by a single submission status', example: 'pending' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by multiple submission statuses', type: [String], example: ['pending'] })
+  @IsOptional()
+  @Transform(({ value, obj }) => {
+    const val = value || obj['statuses[]'];
+    if (typeof val === 'string') return [val];
+    if (Array.isArray(val)) return val;
+    return undefined;
+  })
+  @IsArray()
+  @IsString({ each: true })
+  statuses?: string[];
 }

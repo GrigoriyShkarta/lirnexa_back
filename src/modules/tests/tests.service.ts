@@ -215,7 +215,16 @@ export class TestsService {
     }
 
     if (search) {
-      where.name = { contains: search, mode: 'insensitive' };
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        {
+          attempts: {
+            some: {
+              student: { name: { contains: search, mode: 'insensitive' } },
+            },
+          },
+        },
+      ];
     }
 
     if (category_ids && category_ids.length > 0) {
@@ -422,11 +431,19 @@ export class TestsService {
     page = 1,
     limit = 15,
     status?: string,
+    search?: string,
   ) {
-    const where = {
+    const where: any = {
       ...(test_id && { test_id }),
       ...(status && { status: status as TestStatus }),
     };
+
+    if (search) {
+      where.OR = [
+        { student: { name: { contains: search, mode: 'insensitive' } } },
+        { test: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
 
     const [total_items, data] = await Promise.all([
       this.prisma.testAttempt.count({ where }),

@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional } from 'class-validator';
 import { CategoryResponseDto } from '../../../category/dto/category-response.dto';
-import { HomeworkResponseDto } from '../../homework/dto/homework-response.dto';
+import { HomeworkResponseDto, HomeworkSubmissionResponseDto } from '../../homework/dto/homework-response.dto';
 
 export class LessonAuthorResponseDto {
   @ApiProperty()
@@ -99,6 +99,10 @@ export class LessonResponseDto {
   @ApiProperty({ description: 'Homework submission status for the student', required: false, example: 'not_submitted' })
   @IsOptional()
   homework_status?: string;
+
+  @ApiProperty({ type: () => HomeworkSubmissionResponseDto, required: false, nullable: true })
+  @IsOptional()
+  homework_submission?: HomeworkSubmissionResponseDto | null;
 }
 
 export class PaginatedLessonResponseDto {
