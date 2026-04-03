@@ -158,8 +158,9 @@ export class TestsController {
    */
   @Get('admin/attempts/pending-count')
   @ApiOperation({ summary: 'Get total count of attempts awaiting review' })
-  async get_pending_reviews_count(): Promise<{ count: number }> {
-    return this.tests_service.get_pending_reviews_count();
+  async get_pending_reviews_count(@Req() req: RequestWithUser): Promise<{ count: number }> {
+    const count = await this.tests_service.get_pending_review_count(req.user.sub, req.user.role);
+    return { count };
   }
 
   /**

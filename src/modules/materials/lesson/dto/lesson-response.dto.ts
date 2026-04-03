@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional } from 'class-validator';
 import { CategoryResponseDto } from '../../../category/dto/category-response.dto';
+import { HomeworkResponseDto } from '../../homework/dto/homework-response.dto';
 
 export class LessonAuthorResponseDto {
   @ApiProperty()
@@ -20,6 +21,20 @@ export class LessonCourseResponseDto {
   name: string;
 }
 
+export class PaginationMetaDto {
+  @ApiProperty()
+  total: number;
+  @ApiProperty()
+  page: number;
+  @ApiProperty()
+  limit: number;
+  @ApiProperty()
+  total_pages: number;
+}
+
+/**
+ * Lesson response data with relations and access info
+ */
 export class LessonResponseDto {
   @ApiProperty()
   id: string;
@@ -57,6 +72,9 @@ export class LessonResponseDto {
   @ApiProperty({ type: () => [LessonCourseResponseDto], required: false })
   courses?: LessonCourseResponseDto[];
 
+  @ApiProperty({ type: () => HomeworkResponseDto, required: false })
+  homework?: HomeworkResponseDto;
+
   @ApiProperty()
   created_at: Date;
 
@@ -77,12 +95,16 @@ export class LessonResponseDto {
   @ApiProperty({ description: 'Whether the specified student has access to the lesson', required: false })
   @IsOptional()
   has_access?: boolean;
+
+  @ApiProperty({ description: 'Homework submission status for the student', required: false, example: 'not_submitted' })
+  @IsOptional()
+  homework_status?: string;
 }
 
 export class PaginatedLessonResponseDto {
   @ApiProperty({ type: [LessonResponseDto] })
   data: LessonResponseDto[];
 
-  @ApiProperty()
-  meta: any;
+  @ApiProperty({ type: PaginationMetaDto })
+  meta: PaginationMetaDto;
 }

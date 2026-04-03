@@ -103,7 +103,42 @@ export class AccessService {
     }
 
     // Perform bulk upsert in a transaction
-    return this.prisma.$transaction(operations);
+    const results = await this.prisma.$transaction(operations);
+
+    // Create notifications for newly granted main materials (Lessons or Tests)
+    if (material_type === MaterialType.lesson || material_type === MaterialType.test) {
+      const materials = material_type === MaterialType.lesson 
+        ? await this.prisma.lesson.findMany({
+            where: { id: { in: material_ids } },
+            select: { id: true, name: true },
+          })
+        : await this.prisma.test.findMany({
+            where: { id: { in: material_ids } },
+            select: { id: true, name: true },
+          });
+
+      for (const student_id of student_ids) {
+        for (const mat of materials) {
+          await this.prisma.notification.create({
+            data: {
+              user_id: student_id,
+              message_id: mat.id,
+              message_title: mat.name,
+              message_type: material_type.toLowerCase(),
+              message: `${material_type.toLowerCase()}_access_granted`,
+              payload: {
+                id: mat.id,
+                name: mat.name,
+                material_type: material_type.toLowerCase(),
+                full_access: full_access ?? true,
+              },
+            },
+          });
+        }
+      }
+    }
+
+    return results;
   }
 
   async revoke_access(student_ids: string[], material_ids: string[], material_type: MaterialType) {

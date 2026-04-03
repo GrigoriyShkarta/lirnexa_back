@@ -57,8 +57,8 @@ export class LessonController {
   @Patch(':id')
   @Roles(Role.super_admin, Role.admin, Role.teacher)
   @ApiOperation({ summary: 'Update a lesson' })
-  async update(@Param('id') id: string, @Body() updateLessonDto: UpdateLessonDto) {
-    return this.lessonService.update(id, updateLessonDto);
+  async update(@Param('id') id: string, @Req() req: RequestWithUser, @Body() updateLessonDto: UpdateLessonDto) {
+    return this.lessonService.update(id, req.user.sub, updateLessonDto);
   }
 
   @Delete(':id')

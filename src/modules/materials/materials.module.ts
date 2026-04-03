@@ -7,6 +7,7 @@ import { LessonModule } from './lesson/lesson.module';
 import { CourseModule } from './course/course.module';
 import { AccessModule } from './access/access.module';
 import { ContentCleanupModule } from './content-cleanup.module';
+import { HomeworkModule } from './homework/homework.module';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { ContentCleanupModule } from './content-cleanup.module';
     LessonModule,
     CourseModule,
     AccessModule,
-    ContentCleanupModule
+    ContentCleanupModule,
+    HomeworkModule
   ],
 })
 export class MaterialsModule {}

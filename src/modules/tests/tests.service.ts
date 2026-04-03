@@ -353,10 +353,38 @@ export class TestsService {
               : true,
         },
         include: {
-          test: { select: { name: true } },
-          student: { select: { name: true, avatar: true } },
+          test: { select: { name: true, id: true } },
+          student: { select: { name: true, avatar: true, super_admin_id: true, teacher_id: true, id: true } },
         },
       });
+
+      // Create notifications for admin and teacher
+      const { student, test } = updated;
+      const recipients = new Set<string>();
+      if (student.super_admin_id) recipients.add(student.super_admin_id);
+      if (student.teacher_id) recipients.add(student.teacher_id);
+
+      for (const recipient_id of recipients) {
+        await this.prisma.notification.create({
+          data: {
+            user_id: recipient_id,
+            message_id: student.id,
+            message_title: student.name,
+            message_type: 'test',
+            message: 'test_completed',
+            payload: {
+              test_id: test.id,
+              test_name: test.name,
+              student_id: student.id,
+              student_name: student.name,
+              attempt_id: updated.id,
+              score: updated.score,
+              total_points: updated.total_points,
+              status: updated.status,
+            },
+          },
+        });
+      }
 
       return this.map_attempt_to_dto(updated);
     } catch (error) {
@@ -491,10 +519,30 @@ export class TestsService {
           is_passed: (new_score / (attempt.total_points ?? 1)) * 100 >= (attempt.test.settings as any).passing_score,
         },
         include: {
-          test: { select: { name: true } },
-          student: { select: { name: true, avatar: true } },
+          test: { select: { id: true, name: true } },
+          student: { select: { id: true, name: true, avatar: true } },
         },
       });
+
+      // Notify student if review is finished
+      if (attempt.status === TestStatus.pending_review && new_status === TestStatus.reviewed) {
+        await this.prisma.notification.create({
+          data: {
+            user_id: updated.student.id,
+            message_id: updated.test.id,
+            message_title: updated.test.name,
+            message_type: 'test',
+            message: 'test_reviewed',
+            payload: {
+              test_id: updated.test.id,
+              test_name: updated.test.name,
+              attempt_id: updated.id,
+              score: updated.score,
+              total_points: updated.total_points,
+            },
+          },
+        });
+      }
 
       return this.map_attempt_to_dto(updated);
     } catch (error) {
@@ -503,13 +551,46 @@ export class TestsService {
   }
 
   /**
-   * Gets total count of pending reviews across all tests.
+   * Gets total count of pending reviews across all tests based on role and requester.
    */
-  async get_pending_reviews_count(): Promise<{ count: number }> {
-    const count = await this.prisma.testAttempt.count({
-      where: { status: TestStatus.pending_review }
+  async get_pending_review_count(
+    requester_id: string,
+    requester_role: Role,
+  ): Promise<number> {
+    if (requester_role === Role.student) return 0;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: requester_id },
+      select: { super_admin_id: true },
     });
-    return { count };
+
+    if (!user) return 0;
+
+    const super_admin_id = requester_role === Role.super_admin ? requester_id : user.super_admin_id;
+
+    if (requester_role === Role.super_admin || requester_role === Role.admin) {
+      return this.prisma.testAttempt.count({
+        where: {
+          status: TestStatus.pending_review,
+          test: {
+            super_admin_id: super_admin_id,
+          },
+        },
+      });
+    }
+
+    if (requester_role === Role.teacher) {
+      return this.prisma.testAttempt.count({
+        where: {
+          status: TestStatus.pending_review,
+          student: {
+            teacher_id: requester_id,
+          },
+        },
+      });
+    }
+
+    return 0;
   }
 
   /**

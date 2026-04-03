@@ -71,6 +71,11 @@ model User {
   managed_tests  Test[]        @relation("SuperAdminToTest")
   test_attempts  TestAttempt[] @relation("StudentToTestAttempt")
 
+  authored_homeworks Homework[]           @relation("UserToHomework")
+  managed_homeworks  Homework[]           @relation("SuperAdminToHomework")
+  submissions        HomeworkSubmission[] @relation("StudentToHomeworkSubmission")
+  reviewed_homeworks HomeworkSubmission[] @relation("ReviewerToHomeworkSubmission")
+
   @@map("users")
 }
 
@@ -344,6 +349,7 @@ model Lesson {
   super_admin User?            @relation("SuperAdminToLesson", fields: [super_admin_id], references: [id])
   categories  Category[]       @relation("CategoryToLesson")
   access      MaterialAccess[]
+  homework    Homework?
 
   @@map("lessons")
 }
@@ -365,6 +371,7 @@ model Category {
   lessons     Lesson[]       @relation("CategoryToLesson")
   courses     Course[]       @relation("CategoryToCourse")
   tests       Test[]         @relation("CategoryToTest")
+  homeworks   Homework[]     @relation("CategoryToHomework")
 
   @@map("categories")
 }
@@ -545,4 +552,47 @@ enum TestStatus {
   pending_review
   reviewed
   timed_out
+}
+
+model Homework {
+  id             String   @id @default(uuid())
+  name           String
+  content        Json     @default("[]")
+  lesson_id      String?  @unique @map("lesson_id")
+  author_id      String   @map("author_id")
+  super_admin_id String?  @map("super_admin_id")
+  created_at     DateTime @default(now()) @map("created_at")
+  updated_at     DateTime @updatedAt @map("updated_at")
+
+  lesson      Lesson?              @relation(fields: [lesson_id], references: [id], onDelete: SetNull)
+  author      User                 @relation("UserToHomework", fields: [author_id], references: [id])
+  super_admin User?                @relation("SuperAdminToHomework", fields: [super_admin_id], references: [id])
+  submissions HomeworkSubmission[]
+  categories  Category[]           @relation("CategoryToHomework")
+
+  @@map("homeworks")
+}
+
+model HomeworkSubmission {
+  id          String           @id @default(uuid())
+  homework_id String           @map("homework_id")
+  student_id  String           @map("student_id")
+  text        String?
+  file_urls   String[]         @default([]) @map("file_urls")
+  status      HomeworkStatus   @default(pending)
+  feedback    String?
+  reviewed_by_id String?       @map("reviewed_by_id")
+  created_at  DateTime         @default(now()) @map("created_at")
+  updated_at  DateTime         @updatedAt @map("updated_at")
+
+  homework    Homework  @relation(fields: [homework_id], references: [id], onDelete: Cascade)
+  student     User      @relation("StudentToHomeworkSubmission", fields: [student_id], references: [id], onDelete: Cascade)
+  reviewed_by User?     @relation("ReviewerToHomeworkSubmission", fields: [reviewed_by_id], references: [id])
+
+  @@map("homework_submissions")
+}
+
+enum HomeworkStatus {
+  pending
+  reviewed
 }

@@ -12,6 +12,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { UserQueryDto } from './dto/user-query.dto';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 import { StreamService } from '../integrations/stream/stream.service';
+import { TestsService } from '../tests/tests.service';
 
 @Injectable()
 /**
@@ -24,6 +25,7 @@ export class UserService {
     @Inject(forwardRef(() => GoogleCalendarService))
     private googleCalendarService: GoogleCalendarService,
     private streamService: StreamService,
+    private testsService: TestsService,
   ) {}
 
   /**
@@ -209,6 +211,7 @@ export class UserService {
         dashboard_personalization,
       },
       stream_token: this.streamService.generateToken(user.id),
+      tests_to_review_count: await this.testsService.get_pending_review_count(user.id, user.role),
     };
   }
 

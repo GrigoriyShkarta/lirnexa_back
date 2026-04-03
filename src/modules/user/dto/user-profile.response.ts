@@ -84,6 +84,9 @@ export class UserBaseResponse {
   @ApiPropertyOptional({ example: 'stream-token-string', description: 'Stream.io video token' })
   stream_token?: string;
 
+  @ApiPropertyOptional({ example: 0, description: 'Number of test attempts that need review' })
+  tests_to_review_count?: number;
+
   @ApiPropertyOptional({ type: () => [NotificationResponse], description: 'User notifications' })
   notifications?: NotificationResponse[];
 }

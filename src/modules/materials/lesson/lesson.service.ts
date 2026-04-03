@@ -15,6 +15,13 @@ export class LessonService {
     private readonly accessService: AccessService,
   ) {}
 
+  /**
+   * Create a new lesson
+   * @param userId - ID of the user creating the lesson
+   * @param userRole - Role of the creator
+   * @param dto - Lesson data
+   * @returns Created lesson
+   */
   async create(userId: string, userRole: Role, dto: CreateLessonDto) {
     let super_admin_id: string | null = null;
 
@@ -28,7 +35,7 @@ export class LessonService {
       super_admin_id = user?.super_admin_id || null;
     }
 
-    const { category_id, category_ids: categories, content, course_ids, ...lessonData } = dto;
+    const { category_id, category_ids: categories, content, course_ids, homework_name, homework_content, homework_id, ...lessonData } = dto;
     const finalCategories = categories || category_id;
 
     const lesson = await this.prisma.lesson.create({
@@ -38,6 +45,16 @@ export class LessonService {
         author_id: userId,
         super_admin_id,
         categories: finalCategories ? { connect: (Array.isArray(finalCategories) ? finalCategories : [finalCategories]).map(id => ({ id })) } : undefined,
+        homework: homework_id ? {
+          connect: { id: homework_id }
+        } : (homework_name && homework_content) ? {
+          create: {
+            name: homework_name,
+            content: JSON.parse(homework_content),
+            author_id: userId,
+            super_admin_id,
+          }
+        } : undefined,
       },
     });
 
@@ -48,6 +65,13 @@ export class LessonService {
     return lesson;
   }
 
+  /**
+   * Get all lessons with pagination and filters
+   * @param userId - ID of the user requesting the lessons
+   * @param userRole - Role of the user
+   * @param query - Query parameters for search, pagination and filtering
+   * @returns Paginated list of lessons
+   */
   async get_all(userId: string, userRole: Role, query: LessonQueryDto) {
     const { search, page = 1, limit = 10, category_ids, from_student, student_id } = query;
     const skip = (page - 1) * limit;
@@ -134,11 +158,20 @@ export class LessonService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        total_pages: Math.ceil(total / limit),
       },
     };
   }
 
+  /**
+   * Get a single lesson by ID with its relations and access control
+   * @param id - Lesson ID
+   * @param userId - ID of the user requesting the lesson
+   * @param userRole - Role of the user
+   * @param from_student - Whether the request is from a student view
+   * @param student_id - Optional student ID for access check
+   * @returns Detailed lesson with relations
+   */
   async findOne(id: string, userId: string, userRole: Role, from_student?: boolean, student_id?: string) {
     const isStudent = userRole === Role.student;
     const targetStudentId = student_id || userId;
@@ -152,6 +185,14 @@ export class LessonService {
             email: true,
             avatar: true,
           },
+        },
+        homework: {
+          include: {
+            submissions: (from_student || student_id || isStudent) ? {
+              where: { student_id: targetStudentId },
+              take: 1,
+            } : false,
+          }
         },
         categories: true,
         access: (from_student || student_id || isStudent) ? {
@@ -194,11 +235,19 @@ export class LessonService {
       }
     }
 
+    // Handle homework status
+    let homework_status = lesson.homework ? 'not_submitted' : undefined;
+    // any used here because of dynamically included nested submissions in Prisma query
+    if (lesson.homework && (lesson.homework as any).submissions?.length > 0) {
+      homework_status = (lesson.homework as any).submissions[0].status;
+    }
+
     const withFallback = {
       ...lesson,
       category: lesson.categories?.[0] || null,
       accessible_blocks: accessibleBlocks,
       full_access: isFullAccess,
+      homework_status,
     };
 
     const [withCourses] = await this.fillLessonsWithCourses(
@@ -208,8 +257,15 @@ export class LessonService {
     return withCourses;
   }
 
-  async update(id: string, dto: UpdateLessonDto) {
-    const { category_id, category_ids: categories, content, course_ids, ...lessonData } = dto;
+  /**
+   * Update an existing lesson
+   * @param id - Lesson ID
+   * @param userId - ID of the user updating the lesson
+   * @param dto - Updated data
+   * @returns Updated lesson
+   */
+  async update(id: string, userId: string, dto: UpdateLessonDto) {
+    const { category_id, category_ids: categories, content, course_ids, homework_name, homework_content, homework_id, ...lessonData } = dto;
     const data: any = { ...lessonData };
     
     if (content) {
@@ -221,10 +277,36 @@ export class LessonService {
       data.categories = { set: (Array.isArray(finalCategories) ? finalCategories : [finalCategories]).map(id => ({ id })) };
     }
 
+    if (homework_id) {
+       data.homework = { connect: { id: homework_id } };
+    }
+
     const lesson = await this.prisma.lesson.update({
       where: { id },
       data,
+      include: {
+        super_admin: { select: { id: true } }
+      }
     });
+
+    if (homework_name || homework_content) {
+      const super_admin_id = lesson.super_admin_id;
+
+      await this.prisma.homework.upsert({
+        where: { lesson_id: lesson.id },
+        update: {
+          ...(homework_name && { name: homework_name }),
+          ...(homework_content && { content: JSON.parse(homework_content) }),
+        },
+        create: {
+          name: homework_name || 'Homework',
+          content: homework_content ? JSON.parse(homework_content) : [],
+          lesson_id: lesson.id,
+          author_id: userId,
+          super_admin_id,
+        }
+      });
+    }
 
     if (content) {
       await this.accessService.sync_lesson_materials_access(lesson.id);
@@ -237,6 +319,11 @@ export class LessonService {
     return lesson;
   }
 
+  /**
+   * Delete a lesson
+   * @param id - Lesson ID
+   * @returns Deleted lesson
+   */
   async remove(id: string) {
     await this.cleanupLessonsInCourses([id]);
     return this.prisma.lesson.delete({
@@ -244,6 +331,11 @@ export class LessonService {
     });
   }
 
+  /**
+   * Delete multiple lessons
+   * @param ids - Array of lesson IDs
+   * @returns Result of deletion
+   */
   async remove_bulk(ids: string[]) {
     await this.cleanupLessonsInCourses(ids);
     return this.prisma.lesson.deleteMany({

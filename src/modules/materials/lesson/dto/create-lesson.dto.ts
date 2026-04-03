@@ -64,4 +64,19 @@ export class CreateLessonDto {
   @IsString({ each: true })
   @IsOptional()
   course_ids?: string[];
+
+  @ApiProperty({ example: 'Homework Title', description: 'Homework name if present', required: false })
+  @IsString()
+  @IsOptional()
+  homework_name?: string;
+
+  @ApiProperty({ example: '[]', description: 'Homework content in JSON blocks', required: false })
+  @IsString()
+  @IsOptional()
+  homework_content?: string;
+
+  @ApiProperty({ example: 'uuid', description: 'Existing homework ID to link to the lesson', required: false })
+  @IsString()
+  @IsOptional()
+  homework_id?: string;
 }
